@@ -205,12 +205,17 @@ class BiDAFOutput(nn.Module):
                               hidden_size=hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
+        self.ansPoint = torch.nn.RNN(input_size = 10 * hidden_size, 
+                            hidden_size = hidden_size, 
+                            num_layers = 1)
+        self.att_pos = nn.Linear(hidden_size, 1)
 
         self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
         # Shapes: (batch_size, seq_len, 1)
+        '''
         logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
@@ -218,5 +223,16 @@ class BiDAFOutput(nn.Module):
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+        '''
+        inp = torch.cat((att, mod), 2)
+        F_1, nuStart = self.ansPoint(inp)
+        attention_1 = self.att_pos(F_1)
+        print(attention_1.shape)
+        # may need to apply dropout here
+        
+        F_2, _ = self.ansPoint(inp, nuStart)
+        attention_2 = self.att_pos(F_2)
+        log_p1 = masked_softmax(attention_1.squeeze(), mask, log_softmax = True )
+        log_p2 = masked_softmax(attention_2.squeeze(), mask, log_softmax = True )
 
         return log_p1, log_p2
