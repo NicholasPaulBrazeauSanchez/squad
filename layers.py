@@ -198,19 +198,21 @@ class BiDAFOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutput, self).__init__()
-        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        #self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
         self.rnn = RNNEncoder(input_size=2 * hidden_size,
                               hidden_size=hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
-        self.ansPoint = torch.nn.RNN(input_size = 10 * hidden_size, 
+        self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
                             hidden_size = hidden_size, 
                             num_layers = 1)
         self.att_pos = nn.Linear(hidden_size, 1)
-
-        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        
+        #self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.att_linear_2 = nn.Linear(hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
@@ -225,20 +227,21 @@ class BiDAFOutput(nn.Module):
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
         '''
-        #this is the fancy, rnn based forward for this layer
-        '''
-        inp = torch.cat((att, mod), 2)
-        F_1, nuStart = self.ansPoint(inp)
-        attention_1 = self.att_pos(F_1)
-        #attention_1 = self.droppe(attention_1)
-        print(attention_1.shape)
-        # may need to apply dropout here
+        #this is the fancy, rnn based forward for this layer. It also sucks
         
-        F_2, _ = self.ansPoint(inp, nuStart)
-        attention_2 = self.att_pos(F_2)
-        #attention_2 = self.droppe(attention_2)
-        log_p1 = masked_softmax(attention_1.squeeze(), mask, log_softmax = True )
-        log_p2 = masked_softmax(attention_2.squeeze(), mask, log_softmax = True )
-        '''
+        # here, we may need additional input
+        att_1, nuStart  = self.ansPoint(att)
+        print(att_1.shape)
+        logits_1 = self.att_linear_1(att_1) + self.mod_linear_1(mod)
+        mod_2 = self.rnn(mod, mask.sum(-1))
+        
+        att_2, _ = self.ansPoint(att, nuStart)
+        logits_2 = self.att_linear_2(att_2) + self.mod_linear_2(mod_2)
+
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+        
+        
 
         return log_p1, log_p2
