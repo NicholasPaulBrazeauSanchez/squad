@@ -231,7 +231,6 @@ class BiDAFOutput(nn.Module):
         
         # here, we may need additional input
         att_1, nuStart  = self.ansPoint(att)
-        print(att_1.shape)
         logits_1 = self.att_linear_1(att_1) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         
