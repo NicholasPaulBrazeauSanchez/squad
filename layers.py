@@ -206,16 +206,18 @@ class BiDAFOutput(nn.Module):
                               hidden_size=hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
+        
+        self.question_att = nn.Linear(hidden_size, 1)
         self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
                             hidden_size = hidden_size, 
-                            num_layers = 1)
+                            num_layers = 1, batch_first = True)
         self.att_pos = nn.Linear(hidden_size, 1)
         
         #self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
         self.att_linear_2 = nn.Linear(hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
-    def forward(self, att, mod, mask):
+    def forward(self, att, q, q_mask, mod, mask):
         # Shapes: (batch_size, seq_len, 1)
         # this is the default forward for this layer
         '''
@@ -227,10 +229,18 @@ class BiDAFOutput(nn.Module):
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
         '''
-        #this is the fancy, rnn based forward for this layer. It also sucks
+        #this is the fancy, rnn based forward for this layer. 
         
         # here, we may need additional input
+        questAtt = self.question_att(q).squeeze(2) # Shape: (batch, q_len, 1)
+        nu = masked_softmax(questAtt, q_mask, log_softmax= True)
+        init = torch.bmm(nu.unsqueeze(1), q).squeeze(1).unsqueeze(0)
+        
+        #question conditioning
+        #att_1, nuStart  = self.ansPoint(att, init)
+        #no question conditioning
         att_1, nuStart  = self.ansPoint(att)
+        
         logits_1 = self.att_linear_1(att_1) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         
