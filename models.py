@@ -42,6 +42,16 @@ class BiDAF(nn.Module):
 
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                          drop_prob=drop_prob)
+        
+       
+        
+        self.uno = layers.gatedRNNEncoder1(input_size=2 * hidden_size, 
+                                           hidden_size=2 * hidden_size,
+                                           num_layers = 1, drop_prob = drop_prob)
+        
+        self.dos = layers.selfAttentionRNNEncoder(input_size=2 * hidden_size, 
+                                           hidden_size=2 * hidden_size,
+                                           num_layers = 1, drop_prob = drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
@@ -50,6 +60,9 @@ class BiDAF(nn.Module):
 
         self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
+        
+        self.out2 = layers.SelfAttentionOutput(hidden_size=hidden_size, 
+                                               drop_prob = drop_prob)
 
     def forward(self, cw_idxs, qw_idxs):
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
@@ -61,12 +74,24 @@ class BiDAF(nn.Module):
 
         c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
         q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
+        
+        
 
+        
+        
+        
+        v = self.uno(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
+        h = self.dos(v) # (batch_size, c_len, 2 * hidden_size)
+
+        out = self.out2(h, q_enc, q_mask, c_mask) # 2 tensors, each (batch_size, c_len)
+
+        '''
         att = self.att(c_enc, q_enc,
                        c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
-
+        
         mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
 
         out = self.out(att, q_emb, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        '''
 
         return out
