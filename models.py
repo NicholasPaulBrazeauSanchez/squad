@@ -40,14 +40,16 @@ class BiDAF(nn.Module):
                                      num_layers=1,
                                      drop_prob=drop_prob)
 
-        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
-                                         drop_prob=drop_prob)
+        #self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size, drop_prob=drop_prob)
         
        
-        
+        '''
         self.uno = layers.gatedRNNEncoder1(input_size=2 * hidden_size, 
                                            hidden_size=2 * hidden_size,
                                            num_layers = 1, drop_prob = drop_prob)
+        '''
+        self.unoPrime = layers.DAFAttention(hidden_size = 2 * hidden_size, 
+                                            drop_prob = drop_prob)
         
         self.dos = layers.selfAttentionRNNEncoder(input_size=2 * hidden_size, 
                                            hidden_size=2 * hidden_size,
@@ -58,8 +60,7 @@ class BiDAF(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutput(hidden_size=hidden_size,
-                                      drop_prob=drop_prob)
+        #self.out = layers.BiDAFOutput(hidden_size=hidden_size, drop_prob=drop_prob)
         
         self.out2 = layers.SelfAttentionOutput(hidden_size=hidden_size, 
                                                drop_prob = drop_prob)
@@ -80,7 +81,7 @@ class BiDAF(nn.Module):
         
         
         
-        v = self.uno(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
+        v = self.unoPrime(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
         h = self.dos(v) # (batch_size, c_len, 2 * hidden_size)
 
         out = self.out2(h, q_enc, q_mask, c_mask) # 2 tensors, each (batch_size, c_len)
