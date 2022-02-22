@@ -153,22 +153,10 @@ class gatedRNNEncoder1(nn.Module):
         tanH = nn.Tanh()
         V = []
         vJ = torch.zeros_like(c[:, 0, :]).unsqueeze(1)
-        print(vJ.shape)
         for i in range (c_mask.shape[1]):
             sJ = self.questProj(q) + self.passProj(c[:, i, :]).unsqueeze(1) + self.prevProj(vJ) #(batch_size, q_len, 1)
             aT = softie(tanH(sJ.squeeze(2))) #(batch_size, 2 * hidden)
             cT = torch.bmm(aT.unsqueeze(1), q).squeeze(1).unsqueeze(0) #(1, batch_size, 2*hidden_size)
-            '''
-            print(cT.shape)
-            gU = c[:, i, :] @ self.gWeightEin
-            print(gU.shape)
-            gC = cT @ self.gWeightZwei
-            print(gC.shape)
-            uPrime = gU * c[:, i, :].squeeze(1)
-            print(uPrime.shape)
-            cPrime = gC * cT
-            print(cPrime.shape)
-            '''
             # there's no need to put in gate layers here; the LSTM handles it for us
             vJ, _ = self.rnn(vJ, (c[:,i,:].unsqueeze(0), cT))
             vJ = F.dropout(vJ, self.drop_prob, self.training)
@@ -198,6 +186,8 @@ class selfAttentionRNNEncoder(nn.Module):
                            batch_first=True,
                            bidirectional=False,
                            dropout=drop_prob if num_layers > 1 else 0.)
+        
+        self.betterRnn = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1, drop_prob = drop_prob)
         self.gWeightEin = nn.Parameter(torch.zeros( hidden_size, hidden_size))
         self.gWeightZwei = nn.Parameter(torch.zeros(hidden_size, hidden_size))
         for weight in (self.gWeightEin, self.gWeightZwei):
@@ -205,36 +195,42 @@ class selfAttentionRNNEncoder(nn.Module):
             
         self.currProj = nn.Linear(hidden_size, 1, bias = False)
         self.prevProj = nn.Linear(hidden_size, 1, bias = False)
+        
 
-    def forward(self, v):
+    def forward(self, v, c_mask):
         # Save original padded length for use by pad_packed_sequence
         # may need to run v_0 through things
-        softie = nn.Softmax(dim = 1)
         tanH = nn.Tanh()
+        
+        '''
+        nuevo = self.att_1(v)
+        nuevoP = nuevo.unsqueeze(2).repeat(1, 1, v.shape[1], 1)
+        print(nuevoP.shape)
+        nuevoDos = self.att_2(v)
+        nuevoDosP = nuevoDos.unsqueeze(2).repeat_interleave(1,1, v.shape[1], 1)
+        print(nuevoDos.shape)
+        confusion = tanH(nuevoP + nuevoDosP)
+        a = masked_softmax(confusion, c_mask, dim=2)   
+        print(a.shape)
+        print(v.shape)
+        '''
+        
+        
         H = []
         #make sure it's on the device
-        hJ = torch.zeros_like(v[:, 0, :]).unsqueeze(1)
         for i in range (v.shape[1]):
             un  = self.currProj(v)
             deux = self.prevProj(v[:, i, :])
-            sJ = un + deux.unsqueeze(1)  #(batch_size, p_len, 1)
-            aT = softie(tanH(sJ.squeeze(2))) #(batch_size, 2 * hidden)
-            cT = torch.bmm(aT.unsqueeze(1), v).squeeze(1).unsqueeze(0) #(1, batch_size, 2*hidden_size)
-            '''
-            print(cT.shape)
-            gV = v[:, i, :] @ self.gWeightEin
-            print(gV.shape)
-            gC = cT @ self.gWeightZwei
-            print(gC.shape)
-            vPrime = gV * v[:, i, :].squeeze(1)
-            print(vPrime.shape)
-            cPrime = gC * cT
-            print(cPrime.shape)
-            '''
-            hJ, _ = self.rnn(hJ.contiguous(), (v[:, i, :].unsqueeze(0).contiguous(), cT.contiguous()))
-            hJ = F.dropout(hJ, self.drop_prob, self.training)
-            H.append(hJ)
-        return torch.stack(H, dim = 1).squeeze(2)
+            sJ = tanH(un + deux.unsqueeze(1)).squeeze(2) #(batch_size, p_len, 1)
+            #aT = softie(tanH(sJ.squeeze(2))) #(batch_size, 2 * hidden)
+            aT = masked_softmax(sJ, c_mask, log_softmax=False)
+            cT = torch.bmm(aT.unsqueeze(1), v) #(batch_size, 1, 2*hidden_size)
+
+            base = torch.cat([v[:, i, :].unsqueeze(1), cT], dim = 2)
+            H.append(base)
+        Work = torch.stack(H, dim = 1).squeeze(2)
+        Finale = self.betterRnn(Work, c_mask.sum(-1))
+        return Finale
     
     
     
@@ -389,6 +385,7 @@ class SelfAttentionOutput(nn.Module):
         self.att_linear_1 = nn.Linear(2 * hidden_size, 1)
         self.rnn_linear_1 = nn.Linear(2 * hidden_size, 1)
         
+        
         self.question_att = nn.Linear(2 * hidden_size, 1)
         self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
                             hidden_size = 2 * hidden_size, 
@@ -415,6 +412,8 @@ class SelfAttentionOutput(nn.Module):
         
         # here, we may need additional input
         tanH = nn.Tanh()
+        
+        
         questAtt = tanH(self.question_att(q).squeeze(2)) # Shape: (batch, q_len)
         nu = masked_softmax(questAtt, q_mask, log_softmax= True)
         init = torch.bmm(nu.unsqueeze(1), q)
@@ -494,6 +493,56 @@ class BiDAFOutput(nn.Module):
         att_2, _ = self.ansPoint(att, nuStart)
         logits_2 = self.att_linear_2(att_2) + self.mod_linear_2(mod_2)
 
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+        
+        
+
+        return log_p1, log_p2
+    
+    
+class BiDAFOutputGeneral(nn.Module):
+    """Output layer used by BiDAF for question answering.
+
+    Computes a linear transformation of the attention and modeling
+    outputs, then takes the softmax of the result to get the start pointer.
+    A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
+    A second linear+softmax of the attention output and `mod_2` is used
+    to get the end pointer.
+
+    Args:
+        hidden_size (int): Hidden size used in the BiDAF model.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, drop_prob):
+        super(BiDAFOutputGeneral, self).__init__()
+        self.att_linear_1 = nn.Linear(hidden_size, 1)
+        
+        self.question_att = nn.Linear(hidden_size, 1)
+        self.ansPoint = torch.nn.RNN(input_size = 4 * hidden_size, 
+                            hidden_size = hidden_size, 
+                            num_layers = 1, batch_first = True)
+        self.att_pos = nn.Linear(hidden_size, 1)
+        
+        self.att_linear_2 = nn.Linear(hidden_size, 1)
+
+    def forward(self, att, q, q_mask, mask):
+        #this is the fancy, rnn based forward for this layer. 
+        
+        # It works fine, but I suspect I may not be using the attention correctly
+        questAtt = self.question_att(q).squeeze(2) # Shape: (batch, q_len)
+        nu = masked_softmax(questAtt, q_mask, log_softmax= True)
+        init = torch.bmm(nu.unsqueeze(1), q).squeeze(1).unsqueeze(0)
+        
+        att_1, nuStart  = self.ansPoint(att, init)
+        
+        att_1, nuStart  = self.ansPoint(att)
+        logits_1 = self.att_linear_1(att_1) 
+        
+        att_2, _ = self.ansPoint(att, nuStart)
+        logits_2 = self.att_linear_2(att_2)
+        
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
