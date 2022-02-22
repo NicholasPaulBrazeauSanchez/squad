@@ -152,9 +152,10 @@ class gatedRNNEncoder1(nn.Module):
         softie = nn.Softmax(dim = 1)
         tanH = nn.Tanh()
         V = []
-        vJ = torch.zeros((c.shape[0], 1, c.shape[2]))
+        vJ = torch.zeros_like(c[:, 0, :]).unsqueeze(1)
+        print(vJ.shape)
         for i in range (c_mask.shape[1]):
-            sJ = self.questProj(q) + self.passProj(c[:, i, :]).unsqueeze(2) + self.prevProj(vJ) #(batch_size, q_len, 1)
+            sJ = self.questProj(q) + self.passProj(c[:, i, :]).unsqueeze(1) + self.prevProj(vJ) #(batch_size, q_len, 1)
             aT = softie(tanH(sJ.squeeze(2))) #(batch_size, 2 * hidden)
             cT = torch.bmm(aT.unsqueeze(1), q).squeeze(1).unsqueeze(0) #(1, batch_size, 2*hidden_size)
             '''
@@ -212,7 +213,8 @@ class selfAttentionRNNEncoder(nn.Module):
         softie = nn.Softmax(dim = 1)
         tanH = nn.Tanh()
         H = []
-        hJ = torch.zeros((v.shape[0], 1, v.shape[2]))
+        #make sure it's on the device
+        hJ = torch.zeros_like(v[:, 0, :]).unsqueeze(1)
         for i in range (v.shape[1]):
             un  = self.currProj(v)
             deux = self.prevProj(v[:, i, :])
@@ -302,46 +304,6 @@ class BiDAFAttention(nn.Module):
         s = s0 + s1 + s2 + self.bias
 
         return s
-    
-class BiDAFSelfAttention(nn.Module):
-    """Bidirectional attention originally used by BiDAF.
-
-    Bidirectional attention computes attention in two directions:
-    The context attends to the query and the query attends to the context.
-    The output of this layer is the concatenation of [context, c2q_attention,
-    context * c2q_attention, context * q2c_attention]. This concatenation allows
-    the attention vector at each timestep, along with the embeddings from
-    previous layers, to flow through the attention layer to the modeling layer.
-    The output has shape (batch_size, context_len, 8 * hidden_size).
-
-    Args:
-        hidden_size (int): Size of hidden activations.
-        drop_prob (float): Probability of zero-ing out activations.
-    """
-    def __init__(self, hidden_size, drop_prob=0.1):
-        super(BiDAFAttention, self).__init__()
-        self.drop_prob = drop_prob
-        self.LSTM = torch.nn.LSTM()
-        
-        
-
-    def forward(self, c, q, c_mask, q_mask):
-        batch_size, c_len, _ = c.size()
-        q_len = q.size(1)
-        s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
-        c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
-        q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
-        s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
-        s2 = masked_softmax(s, c_mask, dim=1)       # (batch_size, c_len, q_len)
-
-        # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        a = torch.bmm(s1, q)
-        # (bs, c_len, c_len) x (bs, c_len, hid_size) => (bs, c_len, hid_size)
-        b = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
-
-        x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-
-        return x
 
 
 class SelfAttentionOutput(nn.Module):
