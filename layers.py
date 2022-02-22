@@ -190,6 +190,10 @@ class selfAttentionRNNEncoder(nn.Module):
         self.betterRnn = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1, drop_prob = drop_prob)
         self.gWeightEin = nn.Parameter(torch.zeros( hidden_size, hidden_size))
         self.gWeightZwei = nn.Parameter(torch.zeros(hidden_size, hidden_size))
+        
+        self.selfAttnBest = nn.MultiheadAttention(hidden_size, num_heads = 1, 
+                                              dropout = drop_prob, 
+                                              batch_first = True)
         for weight in (self.gWeightEin, self.gWeightZwei):
             nn.init.xavier_uniform_(weight)
             
@@ -200,7 +204,6 @@ class selfAttentionRNNEncoder(nn.Module):
     def forward(self, v, c_mask):
         # Save original padded length for use by pad_packed_sequence
         # may need to run v_0 through things
-        tanH = nn.Tanh()
         
         '''
         nuevo = self.att_1(v)
@@ -215,7 +218,8 @@ class selfAttentionRNNEncoder(nn.Module):
         print(v.shape)
         '''
         
-        
+        #junk implementation
+        '''
         H = []
         #make sure it's on the device
         for i in range (v.shape[1]):
@@ -231,7 +235,17 @@ class selfAttentionRNNEncoder(nn.Module):
         Work = torch.stack(H, dim = 1).squeeze(2)
         Finale = self.betterRnn(Work, c_mask.sum(-1))
         return Finale
-    
+        '''
+        #masking is probably wrong here, but the following masking doesn't work
+        '''
+        key_mask = ~c_mask
+        nu_mask = ~c_mask.unsqueeze(2).repeat(1, 1, c_mask.shape[1])
+        print(nu_mask.shape)
+        attended, _ = self.selfAttnBest(v, v, v, key_padding_mask = key_mask, attn_mask = nu_mask)
+        '''
+        attended, _ = self.selfAttnBest(v, v, v)
+        return attended
+        
     
     
 class DAFAttention(nn.Module):
@@ -520,7 +534,7 @@ class BiDAFOutputGeneral(nn.Module):
         self.att_linear_1 = nn.Linear(hidden_size, 1)
         
         self.question_att = nn.Linear(hidden_size, 1)
-        self.ansPoint = torch.nn.RNN(input_size = 4 * hidden_size, 
+        self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
                             hidden_size = hidden_size, 
                             num_layers = 1, batch_first = True)
         self.att_pos = nn.Linear(hidden_size, 1)
