@@ -231,7 +231,7 @@ class selfAttentionRNNEncoder(nn.Module):
             cPrime = gC * cT
             print(cPrime.shape)
             '''
-            hJ, _ = self.rnn(hJ.congtiguous(), (v[:, i, :].unsqueeze(0).contiguous(), cT.contiguous()))
+            hJ, _ = self.rnn(hJ.contiguous(), (v[:, i, :].unsqueeze(0).contiguous(), cT.contiguous()))
             hJ = F.dropout(hJ, self.drop_prob, self.training)
             H.append(hJ)
         return torch.stack(H, dim = 1).squeeze(2)
