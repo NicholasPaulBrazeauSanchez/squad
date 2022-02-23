@@ -241,9 +241,12 @@ class selfAttentionRNNEncoder(nn.Module):
         attended, _ = self.selfAttnBest(v, v, v, key_padding_mask = key_mask)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
+        #yes! this works more effectively. Let's see about running this through
+        #an RNN, though
+        nuevoDos = self.betterRnn(nuevo, c_mask.sum(-1))
         
        # attended, _ = self.selfAttnBest(v, v, v)
-        return nuevo
+        return nuevoDos
         
     
     
