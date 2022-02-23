@@ -187,6 +187,9 @@ class selfAttentionRNNEncoder(nn.Module):
                            bidirectional=False,
                            dropout=drop_prob if num_layers > 1 else 0.)
         
+        self.possibleRnn = nn.RNN(2 * hidden_size, hidden_size, batch_first = True, 
+                                  dropout = drop_prob, bidirectional = True)
+        
         self.betterRnn = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1, drop_prob = drop_prob)
         self.gWeightEin = nn.Parameter(torch.zeros( hidden_size, hidden_size))
         self.gWeightZwei = nn.Parameter(torch.zeros(hidden_size, hidden_size))
@@ -243,7 +246,9 @@ class selfAttentionRNNEncoder(nn.Module):
         nuevo = torch.cat([v, attended], dim=2) 
         #yes! this works more effectively. Let's see about running this through
         #an RNN, though
-        nuevoDos = self.betterRnn(nuevo, c_mask.sum(-1))
+        nuevoDos, _ = self.possibleRnn(nuevo)
+        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
+        
         
        # attended, _ = self.selfAttnBest(v, v, v)
         return nuevoDos
