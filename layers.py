@@ -114,54 +114,6 @@ class RNNEncoder(nn.Module):
 
         return x
     
-class gatedRNNEncoder1(nn.Module):
-    """Encoder for the Microsoft model
-    
-    Output correspond to passage tokens, encoded with attention from the 
-    question layer
-
-    Args:
-        input_size (int): Size of a single timestep in the input.
-        hidden_size (int): Size of the RNN hidden state.
-        num_layers (int): Number of layers of RNN cells to use.
-        drop_prob (float): Probability of zero-ing out activations.
-    """
-    def __init__(self,
-                 input_size,
-                 hidden_size,
-                 num_layers,
-                 drop_prob=0.):
-        super(gatedRNNEncoder1, self).__init__()
-        self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
-                           batch_first=True,
-                           bidirectional=False,
-                           dropout=drop_prob if num_layers > 1 else 0.)
-        self.gWeightEin = nn.Parameter(torch.zeros( hidden_size, hidden_size))
-        self.gWeightZwei = nn.Parameter(torch.zeros(hidden_size, hidden_size))
-        for weight in (self.gWeightEin, self.gWeightZwei):
-            nn.init.xavier_uniform_(weight)
-            
-        self.questProj = nn.Linear(hidden_size, 1, bias= False)
-        self.passProj = nn.Linear(hidden_size, 1, bias = False)
-        self.prevProj = nn.Linear(hidden_size, 1, bias = False)
-
-    def forward(self, c, q, c_mask, q_mask):
-        # Save original padded length for use by pad_packed_sequence
-        # may need to run v_0 through things
-        softie = nn.Softmax(dim = 1)
-        tanH = nn.Tanh()
-        V = []
-        vJ = torch.zeros_like(c[:, 0, :]).unsqueeze(1)
-        for i in range (c_mask.shape[1]):
-            sJ = self.questProj(q) + self.passProj(c[:, i, :]).unsqueeze(1) + self.prevProj(vJ) #(batch_size, q_len, 1)
-            aT = softie(tanH(sJ.squeeze(2))) #(batch_size, 2 * hidden)
-            cT = torch.bmm(aT.unsqueeze(1), q).squeeze(1).unsqueeze(0) #(1, batch_size, 2*hidden_size)
-            # there's no need to put in gate layers here; the LSTM handles it for us
-            vJ, _ = self.rnn(vJ, (c[:,i,:].unsqueeze(0), cT))
-            vJ = F.dropout(vJ, self.drop_prob, self.training)
-            V.append(vJ)
-        return torch.stack(V, dim = 1).squeeze(2)
     
 class selfAttention(nn.Module):
     """Self attention RNN encoder
@@ -187,10 +139,10 @@ class selfAttention(nn.Module):
                            bidirectional=False,
                            dropout=drop_prob if num_layers > 1 else 0.)
         
-        self.Rnn = nn.LSTM(2 * hidden_size, hidden_size, batch_first = True, 
+        self.Rnn = nn.LSTM(4 * hidden_size, hidden_size, batch_first = True, 
                                   dropout = drop_prob, bidirectional = True)
         
-        self.selfAttn = nn.MultiheadAttention(hidden_size, num_heads = 1, 
+        self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
         
@@ -222,6 +174,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
+        #self.matcher
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
@@ -236,7 +189,7 @@ class DAFAttention(nn.Module):
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         x = c * a
-        return x    
+        return torch.cat([c, x], dim = 2)    
     
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
