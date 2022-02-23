@@ -83,9 +83,9 @@ class BiDAF(nn.Module):
         
         
         v = self.unoPrime(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
-        #h = self.dos(v, c_mask) # (batch_size, c_len, 2 * hidden_size)
+        h = self.dos(v, c_mask) # (batch_size, c_len, 2 * hidden_size)
         #out = self.out2(h, q_enc, q_mask, c_mask) # 2 tensors, each (batch_size, c_len)
-        out = self.out3(v, q_emb, q_mask, c_mask)
+        out = self.out3(h, q_emb, q_mask, c_mask)
 
         '''
         att = self.att(c_enc, q_enc,
