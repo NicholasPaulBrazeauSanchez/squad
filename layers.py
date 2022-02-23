@@ -319,7 +319,7 @@ class SelfAttentionRNNOutput(nn.Module):
                             hidden_size = 2 * hidden_size, 
                             num_layers = 1, batch_first = True)
         
-        self.att_layer = nn.Linear(self.attention_size, 1)
+        self.att_layer = nn.Linear(self.attention_size, 1, bias = False)
         self.tanH =  nn.Tanh()
         self.drop_prob = drop_prob
         
@@ -427,7 +427,7 @@ class BiDAFOutputRnn(nn.Module):
                             hidden_size = 2 * hidden_size, 
                             num_layers = 1, batch_first = True)
         
-        self.att_layer = nn.Linear(self.attention_size, 1)
+        self.att_layer = nn.Linear(self.attention_size, 1, bias = False)
         self.tanH =  nn.Tanh()
         
         # these layers were originally for predicting the end pointer
