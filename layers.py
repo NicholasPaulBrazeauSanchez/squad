@@ -238,12 +238,12 @@ class selfAttentionRNNEncoder(nn.Module):
         '''
         
         key_mask = ~c_mask
-        nu_mask = ~c_mask.unsqueeze(2).repeat(1, 1, c_mask.shape[1])
-        print(nu_mask.shape)
         attended, _ = self.selfAttnBest(v, v, v, key_padding_mask = key_mask)
+        #attended may not be enough?
+        nuevo = torch.cat([v, attended], dim=2) 
         
        # attended, _ = self.selfAttnBest(v, v, v)
-        return attended
+        return nuevo
         
     
     
@@ -531,7 +531,7 @@ class BiDAFOutputGeneral(nn.Module):
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputGeneral, self).__init__()
        # self.att_linear_1 = nn.Linear(hidden_size, 1)
-        self.att_linear_1 = nn.Linear(2 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(4 * hidden_size, 1)
         
         self.question_att = nn.Linear(hidden_size, 1)
         self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
@@ -540,7 +540,7 @@ class BiDAFOutputGeneral(nn.Module):
         self.att_pos = nn.Linear(hidden_size, 1)
         
         #self.att_linear_2 = nn.Linear(hidden_size, 1)
-        self.att_linear_2 = nn.Linear(2* hidden_size, 1)
+        self.att_linear_2 = nn.Linear(4 * hidden_size, 1)
 
     def forward(self, att, q, q_mask, mask):
         logits_1 = self.att_linear_1(att) 
