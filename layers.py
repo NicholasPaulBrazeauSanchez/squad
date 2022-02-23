@@ -331,7 +331,7 @@ class BiDAFAttention(nn.Module):
         return s
 
 
-class RNNOutput(nn.Module):
+class SelfAttentionRNNOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
 
     Uses the question encodings to get an input state to an attention 
@@ -352,17 +352,23 @@ class RNNOutput(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(RNNOutput, self).__init__()
-        self.att_linear_1 = nn.Linear(4 * hidden_size, 1)
-        self.rnn_linear_1 = nn.Linear(2 * hidden_size, 1)
+        super(SelfAttentionRNNOutput, self).__init__()
+        self.attention_size = 100
+        self.att_linear_1 = nn.Linear(4 * hidden_size, self.attention_size, 
+                                      bias = False)
+        self.rnn_linear_1 = nn.Linear(2 * hidden_size, self.attention_size, 
+                                      bias = False)
         
         
-        self.question_att = nn.Linear(2 * hidden_size, 1)
+        
+        self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
         self.ansPoint = torch.nn.RNN(input_size = 4 * hidden_size, 
                             hidden_size = 2 * hidden_size, 
                             num_layers = 1, batch_first = True)
         
-        #self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.att_layer = nn.Linear(self.attention_size, 1)
+        self.tanH =  nn.Tanh()
+        
         # these layers were originally for predicting the end pointer
         # but they've been done away with
         self.att_linear_2 = nn.Linear(2 * hidden_size, 1)
@@ -372,24 +378,22 @@ class RNNOutput(nn.Module):
         #this is the fancy, rnn based forward for this layer. 
         
         # here, we may need additional input
-        tanH = nn.Tanh()
+       
         
-        questAtt = tanH(self.question_att(q).squeeze(2)) # Shape: (batch, q_len)
-        nu = masked_softmax(questAtt, q_mask, log_softmax= True)
+        questAtt = self.att_layer(self.tanH(self.question_att(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         
         att_linear = self.att_linear_1(att) #
         
-        s1 = tanH(att_linear + self.rnn_linear_1(init))
+        s1 = self.att_layer(self.tanH(att_linear + self.rnn_linear_1(init))) # (batch, c_len, 1)
         log_p1 = masked_softmax(s1.squeeze(), mask, log_softmax=True)
-        a1 = masked_softmax(s1.squeeze(), mask, log_softmax=False)
-        
+        a1 = masked_softmax(s1.squeeze(), mask, log_softmax=False) 
         c1 = torch.bmm(a1.unsqueeze(1), att) #(batch, c_len, 4 * hidden)
-        print(c1.shape)
-        print(init.shape)
+        
         h1, _ = self.ansPoint(c1, init.transpose(0,1))
-        s1 = tanH(att_linear  + self.rnn_linear_1(h1))
-        log_p2 = masked_softmax(s1.squeeze(), mask, log_softmax=True)
+        s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1))) # (batch, c_len,1)
+        log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
         
 
         return log_p1, log_p2
