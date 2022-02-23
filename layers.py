@@ -413,8 +413,7 @@ class BiDAFOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutput, self).__init__()
-        #self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
-        self.att_linear_1 = nn.Linear(hidden_size, 1)
+        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
         self.rnn = RNNEncoder(input_size=2 * hidden_size,
@@ -422,53 +421,23 @@ class BiDAFOutput(nn.Module):
                               num_layers=1,
                               drop_prob=drop_prob)
         
-        self.question_att = nn.Linear(hidden_size, 1)
-        self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
-                            hidden_size = hidden_size, 
-                            num_layers = 1, batch_first = True)
         
-        #self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
-        self.att_linear_2 = nn.Linear(hidden_size, 1)
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, q, q_mask, mod, mask):
         # Shapes: (batch_size, seq_len, 1)
         # this is the default forward for this layer
-        '''
         logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
-
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        '''
-        #this is the fancy, rnn based forward for this layer. 
-        
-        # here, we may need additional input
-        questAtt = self.question_att(q).squeeze(2) # Shape: (batch, q_len)
-        nu = masked_softmax(questAtt, q_mask, log_softmax= True)
-        init = torch.bmm(nu.unsqueeze(1), q).squeeze(1).unsqueeze(0)
-        
-        att_1, nuStart  = self.ansPoint(att, init)
-        
-        att_1, nuStart  = self.ansPoint(att)
-        logits_1 = self.att_linear_1(att_1) + self.mod_linear_1(mod)
-        mod_2 = self.rnn(mod, mask.sum(-1))
-        
-        att_2, _ = self.ansPoint(att, nuStart)
-        logits_2 = self.att_linear_2(att_2) + self.mod_linear_2(mod_2)
-
-        # Shapes: (batch_size, seq_len)
-        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
-        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        
-        
 
         return log_p1, log_p2
     
-    
-class BiDAFOutputGeneral(nn.Module):
+class BiDAFOutputRnn(nn.Module):
     """Output layer used by BiDAF for question answering.
 
     Computes a linear transformation of the attention and modeling
@@ -482,20 +451,87 @@ class BiDAFOutputGeneral(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(BiDAFOutputGeneral, self).__init__()
+        super(BiDAFOutputRnn, self).__init__()
+        '''
+        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
+
+        self.rnn = RNNEncoder(input_size=2 * hidden_size,
+                              hidden_size=hidden_size,
+                              num_layers=1,
+                              drop_prob=drop_prob)
+        
+        
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
+        '''
+        
+        self.attention_size = 100
+        self.att_linear_1 = nn.Linear(8 * hidden_size, self.attention_size, 
+                                      bias = False)
+        self.rnn_linear_1 = nn.Linear(2 * hidden_size, self.attention_size, 
+                                      bias = False)
+        
+        
+        
+        self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
+        self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
+                            hidden_size = 2 * hidden_size, 
+                            num_layers = 1, batch_first = True)
+        
+        self.att_layer = nn.Linear(self.attention_size, 1)
+        self.tanH =  nn.Tanh()
+        
+        # these layers were originally for predicting the end pointer
+        # but they've been done away with
+        self.att_linear_2 = nn.Linear(2 * hidden_size, 1)
+        self.rnn_linear_2 = nn.Linear(2 * hidden_size, 1)
+
+    def forward(self, att, q, q_mask, mod, mask):
+        
+        questAtt = self.att_layer(self.tanH(self.question_att(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
+        init = torch.bmm(nu.unsqueeze(1), q)
+        
+        att_linear = self.att_linear_1(att) #
+        
+        s1 = self.att_layer(self.tanH(att_linear + self.rnn_linear_1(init))) # (batch, c_len, 1)
+        log_p1 = masked_softmax(s1.squeeze(), mask, log_softmax=True)
+        a1 = masked_softmax(s1.squeeze(), mask, log_softmax=False) 
+        c1 = torch.bmm(a1.unsqueeze(1), att) #(batch, c_len, 4 * hidden)
+        
+        h1, _ = self.ansPoint(c1, init.transpose(0,1))
+        s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1))) # (batch, c_len,1)
+        log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
+        
+
+        
+        
+
+        return log_p1, log_p2
+    
+    
+class LinearSelfAttentionOutput(nn.Module):
+    """Output layer used by BiDAF for question answering.
+
+    Computes a linear transformation of the attention and modeling
+    outputs, then takes the softmax of the result to get the start pointer.
+    A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
+    A second linear+softmax of the attention output and `mod_2` is used
+    to get the end pointer.
+
+    Args:
+        hidden_size (int): Hidden size used in the BiDAF model.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, drop_prob):
+        super(LinearSelfAttentionOutput, self).__init__()
        # self.att_linear_1 = nn.Linear(hidden_size, 1)
         self.att_linear_1 = nn.Linear(4 * hidden_size, 1)
-        
-        self.question_att = nn.Linear(hidden_size, 1)
-        self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
-                            hidden_size = hidden_size, 
-                            num_layers = 1, batch_first = True)
-        self.att_pos = nn.Linear(hidden_size, 1)
-        
         #self.att_linear_2 = nn.Linear(hidden_size, 1)
         self.att_linear_2 = nn.Linear(4 * hidden_size, 1)
 
-    def forward(self, att, q, q_mask, mask):
+    def forward(self, att, mask):
         logits_1 = self.att_linear_1(att) 
         
         logits_2 = self.att_linear_2(att)
@@ -503,27 +539,6 @@ class BiDAFOutputGeneral(nn.Module):
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        #this is the fancy, rnn based forward for this layer. 
-        
-        
-        '''
-        # It works fine, but I suspect I may not be using the attention correctly
-        questAtt = self.question_att(q).squeeze(2) # Shape: (batch, q_len)
-        nu = masked_softmax(questAtt, q_mask, log_softmax= True)
-        init = torch.bmm(nu.unsqueeze(1), q).squeeze(1).unsqueeze(0)
-        
-        att_1, nuStart  = self.ansPoint(att, init)
-        
-        att_1, nuStart  = self.ansPoint(att)
-        logits_1 = self.att_linear_1(att_1) 
-        
-        att_2, _ = self.ansPoint(att, nuStart)
-        logits_2 = self.att_linear_2(att_2)
-        
-        # Shapes: (batch_size, seq_len)
-        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
-        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        '''
         
 
         return log_p1, log_p2
