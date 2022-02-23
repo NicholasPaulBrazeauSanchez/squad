@@ -321,6 +321,7 @@ class SelfAttentionRNNOutput(nn.Module):
         
         self.att_layer = nn.Linear(self.attention_size, 1)
         self.tanH =  nn.Tanh()
+        self.drop_prob = drop_prob
         
         # these layers were originally for predicting the end pointer
         # but they've been done away with
@@ -345,6 +346,7 @@ class SelfAttentionRNNOutput(nn.Module):
         c1 = torch.bmm(a1.unsqueeze(1), att) #(batch, c_len, 4 * hidden)
         
         h1, _ = self.ansPoint(c1, init.transpose(0,1))
+        h1 = F.dropout(h1, self.drop_prob, self.training)
         s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1))) # (batch, c_len,1)
         log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
         
@@ -405,19 +407,7 @@ class BiDAFOutputRnn(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputRnn, self).__init__()
-        '''
-        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
-
-        self.rnn = RNNEncoder(input_size=2 * hidden_size,
-                              hidden_size=hidden_size,
-                              num_layers=1,
-                              drop_prob=drop_prob)
-        
-        
-        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
-        '''
+        self.drop_prob = drop_prob
         
         self.attention_size = 100
         self.att_linear_1 = nn.Linear(8 * hidden_size, self.attention_size, 
@@ -460,6 +450,7 @@ class BiDAFOutputRnn(nn.Module):
         mod_2 = self.rnn(mod, mask.sum(-1))
         
         h1, _ = self.ansPoint(c1, init.transpose(0,1))
+        h1 = F.dropout(h1, self.drop_prob, self.training)
         s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1) + self.mod_linear_2(mod_2))) # (batch, c_len,1)
         log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
         
