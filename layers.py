@@ -193,7 +193,7 @@ class selfAttentionRNNEncoder(nn.Module):
         
         self.selfAttnBest = nn.MultiheadAttention(hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
-                                              batch_first = True)
+                                              batch_first= True)
         for weight in (self.gWeightEin, self.gWeightZwei):
             nn.init.xavier_uniform_(weight)
             
@@ -531,7 +531,8 @@ class BiDAFOutputGeneral(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputGeneral, self).__init__()
-        self.att_linear_1 = nn.Linear(hidden_size, 1)
+       # self.att_linear_1 = nn.Linear(hidden_size, 1)
+        self.att_linear_1 = nn.Linear(2 * hidden_size, 1)
         
         self.question_att = nn.Linear(hidden_size, 1)
         self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
@@ -539,11 +540,21 @@ class BiDAFOutputGeneral(nn.Module):
                             num_layers = 1, batch_first = True)
         self.att_pos = nn.Linear(hidden_size, 1)
         
-        self.att_linear_2 = nn.Linear(hidden_size, 1)
+        #self.att_linear_2 = nn.Linear(hidden_size, 1)
+        self.att_linear_2 = nn.Linear(2* hidden_size, 1)
 
     def forward(self, att, q, q_mask, mask):
+        logits_1 = self.att_linear_1(att) 
+        
+        logits_2 = self.att_linear_2(att)
+        
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
         #this is the fancy, rnn based forward for this layer. 
         
+        
+        '''
         # It works fine, but I suspect I may not be using the attention correctly
         questAtt = self.question_att(q).squeeze(2) # Shape: (batch, q_len)
         nu = masked_softmax(questAtt, q_mask, log_softmax= True)
@@ -560,7 +571,7 @@ class BiDAFOutputGeneral(nn.Module):
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        
+        '''
         
 
         return log_p1, log_p2
