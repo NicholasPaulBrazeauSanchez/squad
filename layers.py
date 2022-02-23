@@ -187,7 +187,7 @@ class selfAttentionRNNEncoder(nn.Module):
                            bidirectional=False,
                            dropout=drop_prob if num_layers > 1 else 0.)
         
-        self.possibleRnn = nn.RNN(2 * hidden_size, hidden_size, batch_first = True, 
+        self.possibleRnn = nn.LSTM(2 * hidden_size, hidden_size, batch_first = True, 
                                   dropout = drop_prob, bidirectional = True)
         
         self.betterRnn = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1, drop_prob = drop_prob)
@@ -247,10 +247,7 @@ class selfAttentionRNNEncoder(nn.Module):
         #yes! this works more effectively. Let's see about running this through
         #an RNN, though
         nuevoDos, _ = self.possibleRnn(nuevo)
-        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
         
-        
-       # attended, _ = self.selfAttnBest(v, v, v)
         return nuevoDos
         
     
