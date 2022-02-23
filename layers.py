@@ -236,14 +236,13 @@ class selfAttentionRNNEncoder(nn.Module):
         Finale = self.betterRnn(Work, c_mask.sum(-1))
         return Finale
         '''
-        #masking is probably wrong here, but the following masking doesn't work
-        '''
+        
         key_mask = ~c_mask
         nu_mask = ~c_mask.unsqueeze(2).repeat(1, 1, c_mask.shape[1])
         print(nu_mask.shape)
-        attended, _ = self.selfAttnBest(v, v, v, key_padding_mask = key_mask, attn_mask = nu_mask)
-        '''
-        attended, _ = self.selfAttnBest(v, v, v)
+        attended, _ = self.selfAttnBest(v, v, v, key_padding_mask = key_mask)
+        
+       # attended, _ = self.selfAttnBest(v, v, v)
         return attended
         
     
