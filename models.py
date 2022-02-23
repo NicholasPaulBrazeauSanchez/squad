@@ -62,7 +62,7 @@ class BiDAF(nn.Module):
 
         #self.out = layers.BiDAFOutput(hidden_size=hidden_size, drop_prob=drop_prob)
         
-        self.out2 = layers.RNNOutput(hidden_size, drop_prob)
+        self.out2 = layers.SelfAttentionRNNOutput(hidden_size, drop_prob)
         
         #self.out3 = layers.BiDAFOutputGeneral(hidden_size= hidden_size, drop_prob = drop_prob)
 
