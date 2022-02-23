@@ -424,8 +424,13 @@ class BiDAFOutputRnn(nn.Module):
                                       bias = False)
         self.rnn_linear_1 = nn.Linear(2 * hidden_size, self.attention_size, 
                                       bias = False)
+        self.mod_linear_1 = nn.Linear(2 * hidden_size, self.attention_size)
+        self.mod_linear_2 = nn.Linear(2 * hidden_size, self.attention_size)
         
-        
+        self.rnn = RNNEncoder(input_size=2 * hidden_size,
+                              hidden_size=hidden_size,
+                              num_layers=1,
+                              drop_prob=drop_prob)
         
         self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
         self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
@@ -448,13 +453,14 @@ class BiDAFOutputRnn(nn.Module):
         
         att_linear = self.att_linear_1(att) #
         
-        s1 = self.att_layer(self.tanH(att_linear + self.rnn_linear_1(init))) # (batch, c_len, 1)
+        s1 = self.att_layer(self.tanH(att_linear + self.rnn_linear_1(init) + self.mod_linear_1(mod))) # (batch, c_len, 1)
         log_p1 = masked_softmax(s1.squeeze(), mask, log_softmax=True)
         a1 = masked_softmax(s1.squeeze(), mask, log_softmax=False) 
         c1 = torch.bmm(a1.unsqueeze(1), att) #(batch, c_len, 4 * hidden)
+        mod_2 = self.rnn(mod, mask.sum(-1))
         
         h1, _ = self.ansPoint(c1, init.transpose(0,1))
-        s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1))) # (batch, c_len,1)
+        s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1) + self.mod_linear_2(mod_2))) # (batch, c_len,1)
         log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
         
 
