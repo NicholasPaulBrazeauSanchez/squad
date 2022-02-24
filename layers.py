@@ -135,9 +135,7 @@ class selfAttention(nn.Module):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        #self.Rnn = nn.LSTM(4 * hidden_size, hidden_size, batch_first = True, 
-        #                          dropout = drop_prob, bidirectional = True)
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 2, drop_prob = drop_prob)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
@@ -146,7 +144,6 @@ class selfAttention(nn.Module):
     def forward(self, v, c_mask):
         # Save original padded length for use by pad_packed_sequence
         # may need to run v_0 through things
-        
         key_mask = ~c_mask
         attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
         #attended may not be enough?
@@ -169,7 +166,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 2,
                                   drop_prob = drop_prob)
 
     def forward(self, c, q, c_mask, q_mask):
@@ -315,8 +312,10 @@ class SelfAttentionRNNOutput(nn.Module):
         self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
         self.ansPoint = torch.nn.RNN(input_size = 4 * hidden_size, 
                             hidden_size = 2 * hidden_size, 
-                            num_layers = 1, drop = drop_prob)
+                            num_layers = 1, dropout = drop_prob, batch_first = True)
         
+        # this RNN probably isn't applying context masking correctly, 
+        # but I'm not sure how to fix it
         self.att_layer = nn.Linear(self.attention_size, 1, bias = False)
         self.tanH =  nn.Tanh()
         self.drop_prob = drop_prob
@@ -421,6 +420,9 @@ class BiDAFOutputRnn(nn.Module):
                               drop_prob=drop_prob)
         
         self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
+        
+        # this RNN probably isn't applying context masking correctly, 
+        # but I'm not sure how to fix it
         self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
                             hidden_size = 2 * hidden_size, 
                             num_layers = 1, batch_first = True)
