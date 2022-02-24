@@ -139,6 +139,7 @@ class selfAttention(nn.Module):
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
+        self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
         
 
     def forward(self, v, c_mask):
@@ -148,6 +149,9 @@ class selfAttention(nn.Module):
         attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
+        gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        gate = F.dropout(gate, self.drop_prob, self.training)
+        nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
         
@@ -168,6 +172,7 @@ class DAFAttention(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1))
         self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
                                   drop_prob = drop_prob)
+        self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
@@ -180,9 +185,13 @@ class DAFAttention(nn.Module):
 
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         a = torch.bmm(s1, q)
+        incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-        processed = self.matcher(torch.cat([c, a], dim = 2), preserved)
+        gate = torch.sigmoid(self.RelevanceGate(incoming))
+        gate = F.dropout(gate, self.drop_prob, self.training)
+        incoming = gate * incoming
+        processed = self.matcher(incoming, preserved)
         return processed
     
     def get_similarity_matrix(self, c, q):
