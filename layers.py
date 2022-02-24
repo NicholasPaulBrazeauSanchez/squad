@@ -177,16 +177,15 @@ class selfAttention(nn.Module):
     def __init__(self,
                  input_size,
                  hidden_size,
-                 num_layers,
                  drop_prob=0.):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
-        self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
+        self.Rnn = RNNEncoder(2 * hidden_size , hidden_size, 2, drop_prob = drop_prob)
+        self.selfAttn = nn.MultiheadAttention(hidden_size, num_heads = 1, 
                                               #dropout = drop_prob, 
                                               batch_first= True)
-        self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
+        self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
         
 
     def forward(self, v, c_mask):
@@ -234,10 +233,7 @@ class selfAttention2(nn.Module):
 
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         a = torch.bmm(s1, v)
-        print(a.shape)
-        print(v.shape)
         incoming = torch.cat([v, a], dim = 2)
-        print(incoming.shape)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         gate = torch.sigmoid(self.RelevanceGate(incoming))
@@ -299,8 +295,6 @@ class DAFAttention(nn.Module):
 
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         a = torch.bmm(s1, q)
-        print(c.shape)
-        print(a.shape)
         incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
