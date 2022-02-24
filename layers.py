@@ -114,6 +114,53 @@ class RNNEncoder(nn.Module):
 
         return x
     
+class RNNEncoderUni(nn.Module):
+    """General-purpose layer for encoding a sequence using a bidirectional RNN.
+
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 num_layers,
+                 drop_prob=0.):
+        super(RNNEncoderUni, self).__init__()
+        self.drop_prob = drop_prob
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
+                           batch_first=True,
+                           bidirectional=False,
+                           dropout=drop_prob if num_layers > 1 else 0.)
+
+    def forward(self, x, lengths):
+        # Save original padded length for use by pad_packed_sequence
+        orig_len = x.size(1)
+
+        # Sort by length and pack sequence for RNN
+        lengths, sort_idx = lengths.sort(0, descending=True)
+        x = x[sort_idx]     # (batch_size, seq_len, input_size)
+        x = pack_padded_sequence(x, lengths.cpu(), batch_first=True)
+
+        # Apply RNN
+        x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
+
+        # Unpack and reverse sort
+        x, _ = pad_packed_sequence(x, batch_first=True, total_length=orig_len)
+        _, unsort_idx = sort_idx.sort(0)
+        x = x[unsort_idx]   # (batch_size, seq_len, 2 * hidden_size)
+
+        # Apply dropout (RNN applies dropout after all but the last layer)
+        x = F.dropout(x, self.drop_prob, self.training)
+
+        return x
+    
+    
     
 class selfAttention(nn.Module):
     """Self attention RNN encoder
@@ -137,7 +184,7 @@ class selfAttention(nn.Module):
         
         self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
-                                              dropout = drop_prob, 
+                                              #dropout = drop_prob, 
                                               batch_first= True)
         self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
         
@@ -150,10 +197,77 @@ class selfAttention(nn.Module):
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
         gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        gate = F.dropout(gate, self.drop_prob, self.training)
         nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
+    
+class selfAttention2(nn.Module):
+    """Self attention RNN encoder
+
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, drop_prob=0.1):
+        super(selfAttention2, self).__init__()
+        self.drop_prob = drop_prob
+        self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
+        self.cc_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
+        for weight in (self.c_weight, self.cc_weight):
+            nn.init.xavier_uniform_(weight)
+        self.bias = nn.Parameter(torch.zeros(1))
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 2,
+                                  drop_prob = drop_prob)
+        self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
+
+    def forward(self, v, c_mask):
+        batch_size, c_len, _ = v.size()
+        preserved = c_mask.sum(-1)
+        s = self.get_similarity_matrix(v, v)        # (batch_size, c_len, q_len)
+        c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
+        s1 = masked_softmax(s, c_mask, dim=2)       # (batch_size, c_len, q_len)
+
+        # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
+        a = torch.bmm(s1, v)
+        print(a.shape)
+        print(v.shape)
+        incoming = torch.cat([v, a], dim = 2)
+        print(incoming.shape)
+
+        #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
+        gate = torch.sigmoid(self.RelevanceGate(incoming))
+        incoming = gate * incoming
+        processed = self.matcher(incoming, preserved)
+        return processed
+    
+    def get_similarity_matrix(self, c, q):
+        """Get the "similarity matrix" between context and query (using the
+        terminology of the BiDAF paper).
+
+        A naive implementation as described in BiDAF would concatenate the
+        three vectors then project the result with a single weight matrix. This
+        method is a more memory-efficient implementation of the same operation.
+
+        See Also:
+            Equation 1 in https://arxiv.org/abs/1611.01603
+        """
+        c_len, q_len = c.size(1), q.size(1)
+        c = F.dropout(c, self.drop_prob, self.training)  # (bs, c_len, hid_size)
+        q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
+
+        # Shapes: (batch_size, c_len, q_len)
+        s0 = torch.matmul(c, self.c_weight).expand([-1, -1, q_len])
+        s1 = torch.matmul(q, self.c_weight).transpose(1, 2)\
+                                           .expand([-1, c_len, -1])
+        s2 = torch.matmul(c * self.cc_weight, q.transpose(1, 2))
+        s = s0 + s1 + s2 + self.bias
+
+        return s
         
     
     
@@ -170,7 +284,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
+        self.matcher = RNNEncoderUni(2 * hidden_size, hidden_size, num_layers = 1,
                                   drop_prob = drop_prob)
         self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
 
@@ -185,11 +299,12 @@ class DAFAttention(nn.Module):
 
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         a = torch.bmm(s1, q)
+        print(c.shape)
+        print(a.shape)
         incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         gate = torch.sigmoid(self.RelevanceGate(incoming))
-        gate = F.dropout(gate, self.drop_prob, self.training)
         incoming = gate * incoming
         processed = self.matcher(incoming, preserved)
         return processed
