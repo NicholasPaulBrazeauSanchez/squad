@@ -135,9 +135,9 @@ class selfAttention(nn.Module):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = nn.LSTM(4 * hidden_size, hidden_size, batch_first = True, 
-                                  dropout = drop_prob, bidirectional = True)
-        
+        #self.Rnn = nn.LSTM(4 * hidden_size, hidden_size, batch_first = True, 
+        #                          dropout = drop_prob, bidirectional = True)
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
@@ -151,8 +151,7 @@ class selfAttention(nn.Module):
         attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
-        nuevoDos, _ = self.Rnn(nuevo)
-        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
+        nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
         
     
@@ -170,12 +169,13 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = nn.LSTM(2 * hidden_size, hidden_size, batch_first = True, 
-                                  dropout = drop_prob, bidirectional = True)
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
+                                  drop_prob = drop_prob)
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
+        preserved = c_mask.sum(-1)
         s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
@@ -186,8 +186,8 @@ class DAFAttention(nn.Module):
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         x = c * a
-        processed, _ = self.matcher(torch.cat([c, x], dim = 2))
-        return F.dropout(processed, self.drop_prob, self.training)
+        processed = self.matcher(torch.cat([c, x], dim = 2), preserved)
+        return processed
     
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
@@ -315,7 +315,7 @@ class SelfAttentionRNNOutput(nn.Module):
         self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
         self.ansPoint = torch.nn.RNN(input_size = 4 * hidden_size, 
                             hidden_size = 2 * hidden_size, 
-                            num_layers = 1, batch_first = True)
+                            num_layers = 1, drop = drop_prob)
         
         self.att_layer = nn.Linear(self.attention_size, 1, bias = False)
         self.tanH =  nn.Tanh()
