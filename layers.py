@@ -134,10 +134,6 @@ class selfAttention(nn.Module):
                  drop_prob=0.):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
-                           batch_first=True,
-                           bidirectional=False,
-                           dropout=drop_prob if num_layers > 1 else 0.)
         
         self.Rnn = nn.LSTM(4 * hidden_size, hidden_size, batch_first = True, 
                                   dropout = drop_prob, bidirectional = True)
@@ -174,7 +170,8 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        #self.matcher
+        self.matcher = nn.LSTM(2 * hidden_size, hidden_size, batch_first = True, 
+                                  dropout = drop_prob, bidirectional = True)
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
@@ -189,7 +186,8 @@ class DAFAttention(nn.Module):
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         x = c * a
-        return torch.cat([c, x], dim = 2)    
+        processed, _ = self.matcher(torch.cat([c, x], dim = 2))
+        return F.dropout(processed, self.drop_prob, self.training)
     
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
