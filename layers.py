@@ -135,7 +135,7 @@ class selfAttention(nn.Module):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 2, drop_prob = drop_prob)
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
@@ -166,7 +166,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 2,
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
                                   drop_prob = drop_prob)
 
     def forward(self, c, q, c_mask, q_mask):
@@ -182,8 +182,7 @@ class DAFAttention(nn.Module):
         a = torch.bmm(s1, q)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-        x = c * a
-        processed = self.matcher(torch.cat([c, x], dim = 2), preserved)
+        processed = self.matcher(torch.cat([c, a], dim = 2), preserved)
         return processed
     
     def get_similarity_matrix(self, c, q):
