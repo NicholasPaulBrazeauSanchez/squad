@@ -107,6 +107,50 @@ class RNNEncoder(nn.Module):
         x = F.dropout(x, self.drop_prob, self.training)
 
         return x
+
+class ForwardRNNEncoder(nn.Module):
+    """General-purpose layer for encoding a sequence using a bidirectional RNN.
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 num_layers,
+                 drop_prob=0.):
+        super(ForwardRNNEncoder, self).__init__()
+        self.drop_prob = drop_prob
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
+                           batch_first=True,
+                           bidirectional=False,
+                           dropout=drop_prob if num_layers > 1 else 0.)
+
+    def forward(self, x, lengths):
+        # Save original padded length for use by pad_packed_sequence
+        orig_len = x.size(1)
+
+        # Sort by length and pack sequence for RNN
+        lengths, sort_idx = lengths.sort(0, descending=True)
+        x = x[sort_idx]     # (batch_size, seq_len, input_size)
+        x = pack_padded_sequence(x, lengths.cpu(), batch_first=True)
+
+        # Apply RNN
+        x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
+
+        # Unpack and reverse sort
+        x, _ = pad_packed_sequence(x, batch_first=True, total_length=orig_len)
+        _, unsort_idx = sort_idx.sort(0)
+        x = x[unsort_idx]   # (batch_size, seq_len, 2 * hidden_size)
+
+        # Apply dropout (RNN applies dropout after all but the last layer)
+        x = F.dropout(x, self.drop_prob, self.training)
+
+        return x
     
     
 class selfAttention(nn.Module):
@@ -180,7 +224,6 @@ class selfAttention2(nn.Module):
         #nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
-        print(nuevoDos.shape)
         return nuevoDos
     
 
@@ -523,63 +566,81 @@ class BiDAFOutputRnn(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(BiDAFOutputRnn, self).__init__()
+        super(SelfAttnOutputPtr, self).__init__()
         self.drop_prob = drop_prob
+        self.attn_size = 75
+        self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
+        self.curAttn = nn.Linear(8 * hidden_size, self.attn_size)
+        self.attn_proj = nn.Linear(self.attn_size, 1)
         
-        self.attention_size = 100
-        self.att_linear_1 = nn.Linear(8 * hidden_size, self.attention_size, 
-                                      bias = False)
-        self.rnn_linear_1 = nn.Linear(2 * hidden_size, self.attention_size, 
-                                      bias = False)
-        self.mod_linear_1 = nn.Linear(2 * hidden_size, self.attention_size)
-        self.mod_linear_2 = nn.Linear(2 * hidden_size, self.attention_size)
+        self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 4 * hidden_size, 1, 
+                                          drop_prob = drop_prob)
         
-        self.rnn = RNNEncoder(input_size=2 * hidden_size,
-                              hidden_size=hidden_size,
+        self.rnn = RNNEncoder(input_size=8 * hidden_size,
+                              hidden_size= 2 * hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
         
-        self.question_att = nn.Linear(2 * hidden_size, self.attention_size)
-        
-        # this RNN probably isn't applying context masking correctly, 
-        # but I'm not sure how to fix it
-        self.ansPoint = torch.nn.RNN(input_size = 8 * hidden_size, 
-                            hidden_size = 2 * hidden_size, 
-                            num_layers = 1, batch_first = True)
-        
-        self.att_layer = nn.Linear(self.attention_size, 1, bias = False)
-        self.tanH =  nn.Tanh()
-        
-        # these layers were originally for predicting the end pointer
-        # but they've been done away with
-        self.att_linear_2 = nn.Linear(2 * hidden_size, 1)
-        self.rnn_linear_2 = nn.Linear(2 * hidden_size, 1)
+        self.modState = nn.Linear(2 * hidden_size, self.attn_size)
+
 
     def forward(self, att, q, q_mask, mod, mask):
         
-        questAtt = self.att_layer(self.tanH(self.question_att(q).squeeze(2))) # Shape: (batch, q_len, 1)
-        nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
-        init = torch.bmm(nu.unsqueeze(1), q)
         
-        att_linear = self.att_linear_1(att) #
-        
-        s1 = self.att_layer(self.tanH(att_linear + self.rnn_linear_1(init) + self.mod_linear_1(mod))) # (batch, c_len, 1)
-        log_p1 = masked_softmax(s1.squeeze(), mask, log_softmax=True)
-        a1 = masked_softmax(s1.squeeze(), mask, log_softmax=False) 
-        c1 = torch.bmm(a1.unsqueeze(1), att) #(batch, c_len, 4 * hidden)
-        mod_2 = self.rnn(mod, mask.sum(-1))
-        
-        h1, _ = self.ansPoint(c1, init.transpose(0,1))
-        h1 = F.dropout(h1, self.drop_prob, self.training)
-        s2 = self.att_layer(self.tanH(att_linear  + self.rnn_linear_1(h1) + self.mod_linear_2(mod_2))) # (batch, c_len,1)
-        log_p2 = masked_softmax(s2.squeeze(), mask, log_softmax=True)
-        
-
-        
-        
+        logits_1 = self.attn_proj(self.modState(mod) + self.lastState(torch.zeros_like(mod)))
+        b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
+        WeightedB1 = b1.unsqueeze(2) * att
+        new = self.rnn(WeightedB1, mask.sum(-1))
+        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
     
+class SelfAttnOutputPtr(nn.Module):
+    """Output layer used by BiDAF for question answering.
+    Computes a linear transformation of the attention and modeling
+    outputs, then takes the softmax of the result to get the start pointer.
+    A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
+    A second linear+softmax of the attention output and `mod_2` is used
+    to get the end pointer.
+    Args:
+        hidden_size (int): Hidden size used in the BiDAF model.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, drop_prob):
+        super(SelfAttnOutputPtr, self).__init__()
+        self.drop_prob = drop_prob
+        self.attn_size = 75
+        self.lastState = nn.Linear(4 * hidden_size, self.attn_size)
+        self.curAttn = nn.Linear(8 * hidden_size, self.attn_size)
+        self.attn_proj = nn.Linear(self.attn_size, 1)
+        
+        self.ansPoint = ForwardRNNEncoder(8 * hidden_size, 4 * hidden_size, 1, 
+                                          drop_prob = drop_prob)
+        
+        self.rnn = RNNEncoder(input_size=8 * hidden_size,
+                              hidden_size= 2 * hidden_size,
+                              num_layers=1,
+                              drop_prob=drop_prob)
+        
+        self.modState = nn.Linear(4 * hidden_size, self.attn_size)
+
+    def forward(self, att, q, q_mask, mod, mask):
+        
+        
+        logits_1 = self.attn_proj(torch.tanh(self.curAttn(att) + self.modState(mod) + self.lastState(torch.zeros_like(mod))))
+        b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
+        WeightedB1 = b1.unsqueeze(2) * att
+        new = self.ansPoint(WeightedB1, mask.sum(-1))
+        
+        logits_2 = self.attn_proj(torch.tanh(self.curAttn(att) + self.modState(mod) + self.lastState(new)))
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+
+        return log_p1, log_p2
     
 class LinearSelfAttentionOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
