@@ -54,16 +54,16 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    '''
+    #'''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
-    '''
     #'''
+    '''
     model = SelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
-    #'''
+    '''
     '''
     model = RnnOutput(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
@@ -89,7 +89,8 @@ def main(args):
     # Get optimizer and scheduler
     optimizer = optim.Adadelta(model.parameters(), args.lr,
                                weight_decay=args.l2_wd)
-    scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
+    # set the learning rate to 1/2
+    scheduler = sched.LambdaLR(optimizer, lambda s: (epoch <= 6) * 0.5 + 0.5)  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')
