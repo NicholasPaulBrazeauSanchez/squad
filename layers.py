@@ -126,9 +126,8 @@ class selfAttention(nn.Module):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = 0)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
-                                              dropout = drop_prob, 
                                               batch_first= True)
         self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
         
@@ -141,9 +140,9 @@ class selfAttention(nn.Module):
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
         gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        gate = F.dropout(gate, self.drop_prob, self.training)
         nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
+        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
         return nuevoDos
     
 
@@ -260,8 +259,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1,
-                                  drop_prob = drop_prob)
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1)
         self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
 
     def forward(self, c, q, c_mask, q_mask):
@@ -280,8 +278,8 @@ class DAFAttention(nn.Module):
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         gate = torch.sigmoid(self.RelevanceGate(incoming))
         incoming = gate * incoming
-        incoming = F.dropout(incoming, self.drop_prob, self.training)
         processed = self.matcher(incoming, preserved)
+        processed = F.dropout(processed, self.drop_prob, self.training)
         return processed
     
     def get_similarity_matrix(self, c, q):
