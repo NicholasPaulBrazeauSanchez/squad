@@ -126,7 +126,7 @@ class selfAttention(nn.Module):
         super(selfAttention, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = 0)
+        self.Rnn = RNNEncoder(8 * hidden_size , 2* hidden_size, 1, drop_prob = 0)
         self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
                                               batch_first= True)
         self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
@@ -162,7 +162,7 @@ class selfAttention2(nn.Module):
         super(selfAttention2, self).__init__()
         self.drop_prob = drop_prob
         
-        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = 0)
+        self.Rnn = RNNEncoder(8 * hidden_size , hidden_size, 2, drop_prob = drop_prob)
         self.selfAttn = nn.MultiheadAttention(4 * hidden_size, num_heads = 1, 
                                               batch_first= True)
         #self.RelevanceGate = nn.Linear(8 * hidden_size, 8 * hidden_size, bias = False)
@@ -176,12 +176,12 @@ class selfAttention2(nn.Module):
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
         nuevo = F.dropout(nuevo, self.drop_prob, self.training)
-        return nuevo
         #gate = torch.sigmoid(self.RelevanceGate(nuevo))
         #nuevo = gate * nuevo
-        #nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
-        #nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
-       # return nuevoDos
+        nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
+        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
+        print(nuevoDos.shape)
+        return nuevoDos
     
 
 
@@ -594,16 +594,22 @@ class LinearSelfAttentionOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(LinearSelfAttentionOutput, self).__init__()
-       # self.att_linear_1 = nn.Linear(hidden_size, 1)
-        self.att_linear_1 = nn.Linear(16 * hidden_size, 1)
-        #self.att_linear_2 = nn.Linear(hidden_size, 1)
-        self.att_linear_2 = nn.Linear(16 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(4 * hidden_size, 1)
 
-    def forward(self, att, mask):
-        logits_1 = self.att_linear_1(att) 
+        self.rnn = RNNEncoder(input_size=4 * hidden_size,
+                              hidden_size= 2* hidden_size,
+                              num_layers=1,
+                              drop_prob=drop_prob)
         
-        logits_2 = self.att_linear_2(att)
         
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_2 = nn.Linear(4 * hidden_size, 1)
+
+    def forward(self, att, mod, mask):
+        logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
+        mod_2 = self.rnn(mod, mask.sum(-1))
+        logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
