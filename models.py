@@ -184,7 +184,7 @@ class SelfAttention(nn.Module):
 
         v = self.unoPrime(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
         h = self.dos(v, c_mask) # (batch_size, c_len, 2 * hidden_size)
-        out = self.out(h, c_mask)
+        out = self.out(v, h, c_mask)
 
         return out
     
