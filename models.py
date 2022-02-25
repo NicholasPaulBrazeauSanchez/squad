@@ -160,11 +160,14 @@ class SelfAttention(nn.Module):
                                      num_layers=1,
                                      drop_prob=drop_prob)
 
-        self.unoPrime = layers.DAFAttention(hidden_size = 2 * hidden_size, 
+        self.unoPrime = layers.BiDAFAttention(hidden_size = 2 * hidden_size, 
                                             drop_prob = drop_prob)
         
-        self.dos = layers.selfAttention(4 * hidden_size, hidden_size=2 * hidden_size, 
-                                            drop_prob = drop_prob)
+        #self.dos = layers.selfAttention(4 * hidden_size, hidden_size=2 * hidden_size, 
+        #                                    drop_prob = drop_prob)
+        
+        self.dos = layers.selfAttention2(8 * hidden_size, hidden_size=2 * hidden_size, 
+                                                drop_prob = drop_prob)
         
         self.out = layers.LinearSelfAttentionOutput(hidden_size, drop_prob)
 
