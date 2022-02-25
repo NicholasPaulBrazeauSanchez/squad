@@ -125,7 +125,7 @@ class ForwardRNNEncoder(nn.Module):
                  drop_prob=0.):
         super(ForwardRNNEncoder, self).__init__()
         self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers,
                            batch_first=True,
                            bidirectional=False,
                            dropout=drop_prob if num_layers > 1 else 0.)
@@ -137,7 +137,11 @@ class ForwardRNNEncoder(nn.Module):
         # Sort by length and pack sequence for RNN
         lengths, sort_idx = lengths.sort(0, descending=True)
         x = x[sort_idx]     # (batch_size, seq_len, input_size)
+        print(lengths.cpu())
+        print(lengths)
+        print(x)
         x = pack_padded_sequence(x, lengths.cpu(), batch_first=True)
+        print(x)
 
         # Apply RNN
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
@@ -574,8 +578,12 @@ class BiDAFOutputRnn(nn.Module):
         self.curAttn = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
         
-        self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
-                                          drop_prob = drop_prob)
+       # self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
+                         #                 drop_prob = drop_prob)
+        
+        self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
+                            hidden_size = 2 * hidden_size, 
+                            num_layers = 1, dropout = drop_prob, batch_first = True)
         
         self.rnn = RNNEncoder(input_size=8 * hidden_size,
                               hidden_size= 2 * hidden_size,
@@ -591,7 +599,8 @@ class BiDAFOutputRnn(nn.Module):
         logits_1 = self.attn_proj(self.modState(mod) + self.lastState(torch.zeros_like(mod)))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
         WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
-        new = self.ansPoint(WeightedB1, mask.sum(-1))
+        print(WeightedB1.shape)
+        new, _ = self.ansPoint(WeightedB1)
         
         logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
@@ -619,8 +628,10 @@ class SelfAttnOutputPtr(nn.Module):
         self.curAttn = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
         
-        self.ansPoint = ForwardRNNEncoder(8 * hidden_size, 4 * hidden_size, 1, 
+        self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
                                           drop_prob = drop_prob)
+        
+        self.ansPoint = nn.RNN(8 * hidden_size, 4 * hidden_size)
         
         self.rnn = RNNEncoder(input_size=8 * hidden_size,
                               hidden_size= 2 * hidden_size,
@@ -632,12 +643,13 @@ class SelfAttnOutputPtr(nn.Module):
     def forward(self, att, q, q_mask, mod, mask):
         
         
-        logits_1 = self.attn_proj(torch.tanh(self.curAttn(att) + self.modState(mod) + self.lastState(torch.zeros_like(mod))))
+        logits_1 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(torch.zeros_like(mod))))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
-        WeightedB1 = b1.unsqueeze(2) * att
-        new = self.ansPoint(WeightedB1, mask.sum(-1))
+        WeightedB1 = b1.unsqueeze(2) * mod
+        new, _ = self.ansPoint(WeightedB1)
+        new = F.dropout(new, self.drop_prob, self.training)
         
-        logits_2 = self.attn_proj(torch.tanh(self.curAttn(att) + self.modState(mod) + self.lastState(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
