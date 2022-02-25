@@ -567,14 +567,14 @@ class BiDAFOutputRnn(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(SelfAttnOutputPtr, self).__init__()
+        super(BiDAFOutputRnn, self).__init__()
         self.drop_prob = drop_prob
         self.attn_size = 75
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.curAttn = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
         
-        self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 4 * hidden_size, 1, 
+        self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
                                           drop_prob = drop_prob)
         
         self.rnn = RNNEncoder(input_size=8 * hidden_size,
@@ -590,8 +590,9 @@ class BiDAFOutputRnn(nn.Module):
         
         logits_1 = self.attn_proj(self.modState(mod) + self.lastState(torch.zeros_like(mod)))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
-        WeightedB1 = b1.unsqueeze(2) * att
-        new = self.rnn(WeightedB1, mask.sum(-1))
+        WeightedB1 = torch.bmm(b1.unsqueeze(2) * mod)
+        new = self.ansPoint(WeightedB1, mask.sum(-1))
+        print(new.shape)
         logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
