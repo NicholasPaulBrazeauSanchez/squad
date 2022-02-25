@@ -6,6 +6,7 @@ Author:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
@@ -144,6 +145,105 @@ class selfAttention(nn.Module):
         nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
+    
+
+
+class encoderBlock(nn.Module):
+    """Self attention RNN encoder
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 drop_prob=0.):
+        super(selfAttention, self).__init__()
+        #add positional encoding! Use sin functions
+        self.drop_prob = drop_prob
+        
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
+        self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
+                                              dropout = drop_prob, 
+                                              batch_first= True)
+        #self.Convoluter = [ , nn.Linear(2 * hidden_size)]
+        self.LinearEin = nn.Linear(2 * hidden_size)
+        self.layerNormEin = nn.Linear(2 * hidden_size)
+        self.LinearZwei = nn.Linear(2 * hidden_size)
+        
+
+    def forward(self, v, c_mask):
+        # Save original padded length for use by pad_packed_sequence
+        # may need to run v_0 through things
+        key_mask = ~c_mask
+        v = v + self.positionEncoder(v)
+        v = torch.relu(self.selfLinearZero(v))
+        attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
+        #attended may not be enough?
+        
+        attended = F.relu(self.LinearEin(attended))
+        attended = F.relu(self.LinearEin(attended))
+        nuevo = torch.cat([v, attended], dim=2) 
+        gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        gate = F.dropout(gate, self.drop_prob, self.training)
+        nuevo = gate * nuevo
+        nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
+        return nuevoDos
+    
+    # https://github.com/wzlxjtu/PositionalEncoding2D/blob/master/positionalembedding2d.py
+    def positionEncoder(self, v):
+        d = v.shape[2]
+        encoder = nn.zeros_like(v[1,:,:])
+        pos  = torch.arange(0, v.shape[1]).unsqueeze(1)
+        divisor = torch.exp((torch.arange(0, d, 2, dtype=torch.float)* -(math.log(10000.0) / d)))
+        encoder[:, 0::2] = torch.sin(pos.float() * divisor)
+        encoder[:, 1::2] = torch.cos(pos.float() * divisor)
+        return encoder
+        
+        
+    
+class selfAttentionBiDAF(nn.Module):
+    """Self attention RNN encoder
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 drop_prob=0.):
+        super(selfAttentionBiDAF, self).__init__()
+        self.drop_prob = drop_prob
+        
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = drop_prob)
+        self.selfAttn = nn.MultiheadAttention(2 * hidden_size, num_heads = 1, 
+                                              dropout = drop_prob, 
+                                              batch_first= True)
+        self.RelevanceGate = nn.Linear(4 * hidden_size, 4 * hidden_size, bias = False)
+        
+
+    def forward(self, v, c_mask):
+        # Save original padded length for use by pad_packed_sequence
+        # may need to run v_0 through things
+        key_mask = ~c_mask
+        attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
+        #attended may not be enough?
+        nuevo = torch.cat([v, attended], dim=2) 
+        gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        gate = F.dropout(gate, self.drop_prob, self.training)
+        nuevo = gate * nuevo
+        nuevo = F.dropout(nuevo, self.drop_prob, self.training)
+        nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
+        return nuevoDos
+        
         
     
     
@@ -180,6 +280,7 @@ class DAFAttention(nn.Module):
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
         gate = torch.sigmoid(self.RelevanceGate(incoming))
         incoming = gate * incoming
+        incoming = F.dropout(incoming, self.drop_prob, self.training)
         processed = self.matcher(incoming, preserved)
         return processed
     
