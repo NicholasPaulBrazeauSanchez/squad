@@ -144,6 +144,44 @@ class selfAttention(nn.Module):
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
         return nuevoDos
+
+class selfAttention2(nn.Module):
+    """Self attention RNN encoder
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 drop_prob=0.):
+        super(selfAttention2, self).__init__()
+        self.drop_prob = drop_prob
+        
+        self.Rnn = RNNEncoder(4 * hidden_size , hidden_size, 1, drop_prob = 0)
+        self.selfAttn = nn.MultiheadAttention(4 * hidden_size, num_heads = 1, 
+                                              batch_first= True)
+        #self.RelevanceGate = nn.Linear(8 * hidden_size, 8 * hidden_size, bias = False)
+        
+
+    def forward(self, v, c_mask):
+        # Save original padded length for use by pad_packed_sequence
+        # may need to run v_0 through things
+        key_mask = ~c_mask
+        attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
+        #attended may not be enough?
+        nuevo = torch.cat([v, attended], dim=2) 
+        nuevo = F.dropout(nuevo, self.drop_prob, self.training)
+        return nuevo
+        #gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        #nuevo = gate * nuevo
+        #nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
+        #nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
+       # return nuevoDos
     
 
 
@@ -557,9 +595,9 @@ class LinearSelfAttentionOutput(nn.Module):
     def __init__(self, hidden_size, drop_prob):
         super(LinearSelfAttentionOutput, self).__init__()
        # self.att_linear_1 = nn.Linear(hidden_size, 1)
-        self.att_linear_1 = nn.Linear(4 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(16 * hidden_size, 1)
         #self.att_linear_2 = nn.Linear(hidden_size, 1)
-        self.att_linear_2 = nn.Linear(4 * hidden_size, 1)
+        self.att_linear_2 = nn.Linear(16 * hidden_size, 1)
 
     def forward(self, att, mask):
         logits_1 = self.att_linear_1(att) 
