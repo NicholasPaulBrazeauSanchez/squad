@@ -49,21 +49,21 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    '''
+    #'''
     model = BiDAF(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
-    '''
+    #'''
     '''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    #'''
+    '''
     model = SelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
-    #'''
+    '''
     '''
     model = RnnOutput(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
