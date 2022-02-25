@@ -590,7 +590,7 @@ class BiDAFOutputRnn(nn.Module):
         
         logits_1 = self.attn_proj(self.modState(mod) + self.lastState(torch.zeros_like(mod)))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
-        WeightedB1 = torch.bmm(b1.unsqueeze(2), mod)
+        WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
         new = self.ansPoint(WeightedB1, mask.sum(-1))
         
         logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
