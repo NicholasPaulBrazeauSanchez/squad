@@ -11,19 +11,16 @@ import torch.nn as nn
 
 class BiDAF(nn.Module):
     """Baseline BiDAF model for SQuAD.
-
     Based on the paper:
     "Bidirectional Attention Flow for Machine Comprehension"
     by Minjoon Seo, Aniruddha Kembhavi, Ali Farhadi, Hannaneh Hajishirzi
     (https://arxiv.org/abs/1611.01603).
-
     Follows a high-level structure commonly found in SQuAD models:
         - Embedding layer: Embed word indices to get word vectors.
         - Encoder layer: Encode the embedded sequence.
         - Attention layer: Apply an attention mechanism to the encoded sequence.
         - Model encoder layer: Encode the sequence again.
         - Output layer: Simple layer (e.g., fc + softmax) to get final outputs.
-
     Args:
         word_vectors (torch.Tensor): Pre-trained word vectors.
         hidden_size (int): Number of features in the hidden state at each layer.
@@ -40,16 +37,17 @@ class BiDAF(nn.Module):
                                      num_layers=1,
                                      drop_prob=drop_prob)
 
-        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size, drop_prob=drop_prob)
-        
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutput(hidden_size=hidden_size, drop_prob=drop_prob)
-        
+        self.out = layers.BiDAFOutput(hidden_size=hidden_size,
+                                      drop_prob=drop_prob)
+
     def forward(self, cw_idxs, qw_idxs):
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
@@ -61,14 +59,12 @@ class BiDAF(nn.Module):
         c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
         q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
 
-
         att = self.att(c_enc, q_enc,
                        c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
-        
+
         mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
 
-        out = self.out(att, q_emb, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
-
+        out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
     
@@ -103,14 +99,20 @@ class RNNOutputSelfAttention(nn.Module):
                                      num_layers=1,
                                      drop_prob=drop_prob)
 
-        self.unoPrime = layers.DAFAttention(hidden_size = 2 * hidden_size, 
+        #self.unoPrime = layers.DAFAttention(hidden_size = 2 * hidden_size, 
+        #                                    drop_prob = drop_prob)
+        
+        self.unoPrime = layers.BiDAFAttention(hidden_size = 2 * hidden_size, 
                                             drop_prob = drop_prob)
         
-        self.dos = layers.selfAttention(input_size=2 * hidden_size, 
-                                           hidden_size=2 * hidden_size,
-                                           num_layers = 1, drop_prob = drop_prob)
+        self.dos = layers.selfAttention2(8 * hidden_size, hidden_size=2 * hidden_size, 
+                                                drop_prob = drop_prob)
         
-        self.out2 = layers.SelfAttentionRNNOutput(hidden_size, drop_prob)
+        #self.dos = layers.selfAttention(input_size=2 * hidden_size, 
+                                          # hidden_size=2 * hidden_size,
+                                           #num_layers = 1, drop_prob = drop_prob)
+        
+        self.out2 = layers.SelfAttnOutputPtr(hidden_size, drop_prob)
 
     def forward(self, cw_idxs, qw_idxs):
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
@@ -125,7 +127,7 @@ class RNNOutputSelfAttention(nn.Module):
 
         v = self.unoPrime(c_enc, q_enc, c_mask, q_mask) # (batch_size, c_len, 2 * hidden_size)
         h = self.dos(v, c_mask) # (batch_size, c_len, 2 * hidden_size)
-        out = self.out2(h, q_enc, q_mask, c_mask)
+        out = self.out2(v, q_enc, q_mask, h, c_mask)
 
         return out
     
