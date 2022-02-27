@@ -68,6 +68,7 @@ class EmbeddingWithChar(nn.Module):
         embChar = torch.transpose(embChar, 1, 3)
         embChar = torch.transpose(embChar, 2, 3)
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
+        embChar = F.dropout(embChar, self.drop_prob, self.training)
         embChar, _ = torch.max(embChar, dim = 3)
         embChar = torch.transpose(embChar, 1, 2)
         proc = torch.cat([emb, embChar], dim = 2)
