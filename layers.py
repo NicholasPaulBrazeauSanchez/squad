@@ -35,6 +35,45 @@ class Embedding(nn.Module):
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
+    
+class EmbeddingWithChar(nn.Module):
+    """Embedding layer used by BiDAF, without the character-level component.
+    Word-level embeddings are further refined using a 2-layer Highway Encoder
+    (see `HighwayEncoder` class for details).
+    Args:
+        word_vectors (torch.Tensor): Pre-trained word vectors.
+        hidden_size (int): Size of hidden activations.
+        drop_prob (float): Probability of zero-ing out activations
+    """
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
+        super(EmbeddingWithChar, self).__init__()
+        self.drop_prob = drop_prob
+        self.embed = nn.Embedding.from_pretrained(word_vectors)
+        self.embedChar = nn.Embedding.from_pretrained(char_vectors)
+        self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
+        self.conv = nn.Conv2d(in_channels = char_vectors.size(1), 
+                              out_channels = hidden_size,
+                              kernel_size = (1,5))
+        self.hwy = HighwayEncoder(2, 2 * hidden_size)
+
+    def forward(self, x, xchar, xmasks):
+
+        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+        #this is legit
+        embChar = self.embedChar(xchar) # (batch_Size, seq_len, char_len, embed_size)
+        emb = F.dropout(emb, self.drop_prob, self.training)
+        embChar = F.dropout(embChar, self.drop_prob, self.training)
+        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
+        #hit embChar with a 2dconv, and then a highway
+        embChar = torch.transpose(embChar, 1, 3)
+        embChar = torch.transpose(embChar, 2, 3)
+        embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
+        embChar, _ = torch.max(embChar, dim = 3)
+        embChar = torch.transpose(embChar, 1, 2)
+        proc = torch.cat([emb, embChar], dim = 2)
+        proc = self.hwy(proc)   # (batch_size, seq_len, hidden_size)
+
+        return proc
 
 
 class HighwayEncoder(nn.Module):
@@ -137,11 +176,7 @@ class ForwardRNNEncoder(nn.Module):
         # Sort by length and pack sequence for RNN
         lengths, sort_idx = lengths.sort(0, descending=True)
         x = x[sort_idx]     # (batch_size, seq_len, input_size)
-        print(lengths.cpu())
-        print(lengths)
-        print(x)
         x = pack_padded_sequence(x, lengths.cpu(), batch_first=True)
-        print(x)
 
         # Apply RNN
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
