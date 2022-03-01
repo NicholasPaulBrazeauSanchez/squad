@@ -57,6 +57,7 @@ class EmbeddingWithChar(nn.Module):
         #probably bad to hardcode shapes like this, but it'll do
         self.maxpool = nn.MaxPool2d((1,12))
         self.hwy = HighwayEncoder(2, 2 * hidden_size)
+        self.relu = nn.ReLU()
 
     def forward(self, x, xchar, xmasks):
 
@@ -69,9 +70,10 @@ class EmbeddingWithChar(nn.Module):
         embChar = torch.transpose(embChar, 1, 3)
         embChar = torch.transpose(embChar, 2, 3)
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
-        embChar = F.dropout(embChar, self.drop_prob, self.training)
+        embChar = self.relu(embChar)
         #dropout here doesn't work
         embChar = self.maxpool(embChar).squeeze(3)
+        embChar = F.dropout(embChar, self.drop_prob, self.training)
         #embChar, _ = torch.max(embChar, dim = 3)
         embChar = torch.transpose(embChar, 1, 2)
         proc = torch.cat([emb, embChar], dim = 2)
@@ -368,7 +370,7 @@ class selfAttentionBiDAF(nn.Module):
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
         gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        gate = F.dropout(gate, self.drop_prob, self.training)
+        #gate = F.dropout(gate, self.drop_prob, self.training)
         nuevo = gate * nuevo
         nuevo = F.dropout(nuevo, self.drop_prob, self.training)
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
