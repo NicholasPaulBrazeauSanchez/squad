@@ -54,6 +54,8 @@ class EmbeddingWithChar(nn.Module):
         self.conv = nn.Conv2d(in_channels = char_vectors.size(1), 
                               out_channels = hidden_size,
                               kernel_size = (1,5))
+        #probably bad to hardcode shapes like this, but it'll do
+        self.maxpool = nn.MaxPool2d((1,12))
         self.hwy = HighwayEncoder(2, 2 * hidden_size)
 
     def forward(self, x, xchar, xmasks):
@@ -68,8 +70,9 @@ class EmbeddingWithChar(nn.Module):
         embChar = torch.transpose(embChar, 1, 3)
         embChar = torch.transpose(embChar, 2, 3)
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
-        embChar = F.dropout(embChar, self.drop_prob, self.training)
-        embChar, _ = torch.max(embChar, dim = 3)
+        #dropout here doesn't work
+        embChar = self.maxpool(embChar).squeeze(3)
+        #embChar, _ = torch.max(embChar, dim = 3)
         embChar = torch.transpose(embChar, 1, 2)
         proc = torch.cat([emb, embChar], dim = 2)
         proc = self.hwy(proc)   # (batch_size, seq_len, hidden_size)
