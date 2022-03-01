@@ -96,10 +96,13 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
+    args.lr = 1
+    args.l2_wd = .95
     optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+                               weight_decay=args.l2_wd, eps = 1e-6)
     # set the learning rate to 1/2
-    scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
+    #scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
+    scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
 
     # Get data loader
     log.info('Building dataset...')
