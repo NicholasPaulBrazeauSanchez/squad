@@ -65,6 +65,7 @@ class EmbeddingWithChar(nn.Module):
         #this is legit
         embChar = self.embedChar(xchar) # (batch_Size, seq_len, char_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
+        embChar = F.dropout(embChar, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         #hit embChar with a 2dconv, and then a highway
         embChar = torch.transpose(embChar, 1, 3)
@@ -72,7 +73,7 @@ class EmbeddingWithChar(nn.Module):
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
         embChar = self.relu(embChar)
-        embChar = F.dropout(embChar, self.drop_prob, self.training)
+        
         embChar = self.maxpool(embChar).squeeze(3)
         
         #embChar, _ = torch.max(embChar, dim = 3)
