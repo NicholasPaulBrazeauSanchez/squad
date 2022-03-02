@@ -19,6 +19,7 @@ from collections import OrderedDict
 from json import dumps
 from models import BiDAF
 from models import RNNOutputSelfAttention
+from models import BiDAFCharRNNOutput
 from models import SelfAttention
 from models import RnnOutput
 from models import BiDAFChar
@@ -56,13 +57,13 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    #'''
+    '''
     model = BiDAFChar(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    #'''
+    '''
     '''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
@@ -78,6 +79,13 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
+    #'''
+    model = BiDAFCharRNNOutput(word_vectors=word_vectors,
+                      char_vectors=char_vectors,
+                  hidden_size=args.hidden_size,
+                  drop_prob=args.drop_prob)
+    acceptingCharacterEmbeds = True
+    #'''
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
