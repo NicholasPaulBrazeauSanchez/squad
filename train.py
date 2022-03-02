@@ -68,6 +68,7 @@ def main(args):
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
+    acceptingCharacterEmbeds = False
     #'''
     '''
     model = SelfAttention(word_vectors=word_vectors,
