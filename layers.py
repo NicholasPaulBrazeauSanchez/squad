@@ -71,7 +71,7 @@ class EmbeddingWithChar(nn.Module):
         embChar = torch.transpose(embChar, 2, 3)
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
-        embChar = self.relu(embChar)
+        #embChar = self.relu(embChar)
         
         embChar = self.maxpool(embChar).squeeze(3)
         
@@ -623,7 +623,7 @@ class BiDAFOutputRnn(nn.Module):
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputRnn, self).__init__()
         self.drop_prob = drop_prob
-        self.attn_size = 75
+        self.attn_size = 100
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
@@ -643,6 +643,7 @@ class BiDAFOutputRnn(nn.Module):
                               drop_prob=drop_prob)
         
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
+        self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
     def forward(self, att, q, q_mask, mod, mask):
@@ -655,8 +656,10 @@ class BiDAFOutputRnn(nn.Module):
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
         WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
         new, _ = self.ansPoint(WeightedB1, torch.transpose(init, 0, 1))
+        new = F.dropout(new, self.drop_prob, self.training)
+        mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.Attn2(att) + self.modState(mod) + self.lastState(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.Attn2(att) + self.modState2(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
