@@ -86,7 +86,7 @@ class RNET(nn.Module):
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
-                                     num_layers=2,
+                                     num_layers=1,
                                      drop_prob=drop_prob)
         
         self.dos = layers.selfAttention2(2 * hidden_size, hidden_size= hidden_size, 
@@ -114,7 +114,7 @@ class RNET(nn.Module):
         
         mod = self.dos(mod, c_mask)
 
-        out = self.out(q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        out = self.out(att, q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
     
