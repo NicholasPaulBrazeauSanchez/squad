@@ -403,8 +403,8 @@ class DAFAttention(nn.Module):
         incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-        gate = torch.sigmoid(self.RelevanceGate(incoming))
-        incoming = gate * incoming
+        #gate = torch.sigmoid(self.RelevanceGate(incoming))
+        #incoming = gate * incoming
         #processed = self.matcher(incoming, preserved)
         #processed = F.dropout(processed, self.drop_prob, self.training)
         return incoming
