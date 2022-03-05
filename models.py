@@ -276,10 +276,10 @@ class BiDAFCharRNNOutput(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                          drop_prob=drop_prob)
 
-        self.mod = layers.RNNEncoder(input_size=4 * hidden_size,
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
                                      num_layers=2,
                                      drop_prob=drop_prob)
@@ -305,7 +305,7 @@ class BiDAFCharRNNOutput(nn.Module):
 
         mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
 
-        out = self.out(q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        out = self.out(att, q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
     
