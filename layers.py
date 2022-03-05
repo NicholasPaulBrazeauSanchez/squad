@@ -67,7 +67,7 @@ class EmbeddingWithChar(nn.Module):
         emb = F.dropout(emb, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         #hit embChar with a 2dconv, and then a highway
-        embChar = torch.permute(embChar, (0, 3, 1, 2))
+        embChar = embChar.permute((0, 3, 1, 2))
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
         #embChar = self.relu(embChar)
@@ -708,7 +708,7 @@ class BiDAFOutputRnnMulti(nn.Module):
         new = F.dropout(new, self.drop_prob, self.training)
         mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.modState2(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
