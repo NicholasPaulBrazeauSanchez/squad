@@ -695,20 +695,20 @@ class BiDAFOutputRnnMulti(nn.Module):
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
-    def forward(self, q, q_mask, mod, mask):
+    def forward(self, att, q, q_mask, mod, mask):
         questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         
         
-        logits_1 = self.attn_proj(self.modState(mod) + self.lastState(init))
+        logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
         WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
         new, _ = self.ansPoint(WeightedB1, torch.transpose(init, 0, 1))
         new = F.dropout(new, self.drop_prob, self.training)
         mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.Attn1(att) + self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
