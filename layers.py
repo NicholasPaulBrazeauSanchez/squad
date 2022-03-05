@@ -253,7 +253,7 @@ class selfAttention2(nn.Module):
         self.drop_prob = drop_prob
         
         self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
-        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
+        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 4, 
                                               dropout = drop_prob, 
                                               batch_first= True)
         self.RelevanceGate = nn.Linear(2 * input_size, 2 * input_size, bias = False)
@@ -269,7 +269,6 @@ class selfAttention2(nn.Module):
         gate = torch.sigmoid(self.RelevanceGate(nuevo))
         nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
-        nuevoDos = F.dropout(nuevoDos, self.drop_prob, self.training)
         return nuevoDos
     
 
@@ -675,9 +674,11 @@ class BiDAFOutputRnnMulti(nn.Module):
         self.attn_size = 100
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
+        self.Attn1var = nn.Linear(8 * hidden_size, 1)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
         self.question_attn = nn.Linear(2 * hidden_size, self.attn_size)
+        self.question_attn_var = nn.Linear(2 * hidden_size, 1)
         
        # self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
                          #                 drop_prob = drop_prob)
@@ -692,11 +693,12 @@ class BiDAFOutputRnnMulti(nn.Module):
                               drop_prob=drop_prob)
         
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
+        self.modStateVar = nn.Linear(2 * hidden_size, 1, bias = False)
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
     def forward(self, att, q, q_mask, mod, mask):
-        questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        questAtt = self.attn_proj(torch.relu(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         
