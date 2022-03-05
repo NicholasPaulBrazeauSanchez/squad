@@ -708,7 +708,7 @@ class BiDAFOutputRnnMulti(nn.Module):
         new = F.dropout(new, self.drop_prob, self.training)
         mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.modState2(mod) + self.lastState(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
