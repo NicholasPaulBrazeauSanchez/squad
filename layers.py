@@ -67,8 +67,7 @@ class EmbeddingWithChar(nn.Module):
         emb = F.dropout(emb, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         #hit embChar with a 2dconv, and then a highway
-        embChar = torch.transpose(embChar, 1, 3)
-        embChar = torch.transpose(embChar, 2, 3)
+        embChar = torch.permute(embChar, (0, 3, 1, 2))
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
         #embChar = self.relu(embChar)
@@ -80,13 +79,6 @@ class EmbeddingWithChar(nn.Module):
         embChar = F.dropout(embChar, self.drop_prob, self.training)
         proc = torch.cat([emb, embChar], dim = 2)
         proc = self.hwy(proc)   # (batch_size, seq_len, hidden_size)
-        
-        '''
-        embChar = torch.transpose(embChar, 1, 2)
-        proc = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
-        proc2 = self.hwy(embChar)
-        proc = torch.cat([proc, proc2], dim = 2)
-        '''
 
         return proc
 
@@ -637,8 +629,8 @@ class BiDAFOutputRnn(nn.Module):
                             hidden_size = 2 * hidden_size, 
                             num_layers = 1, dropout = drop_prob, batch_first = True)
         
-        self.rnn = RNNEncoder(input_size=8 * hidden_size,
-                              hidden_size= 2 * hidden_size,
+        self.rnn = RNNEncoder(input_size=2 * hidden_size,
+                              hidden_size= hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
         
@@ -660,6 +652,63 @@ class BiDAFOutputRnn(nn.Module):
         mod = self.rnn(mod, mask.sum(-1))
         
         logits_2 = self.attn_proj(torch.tanh(self.Attn2(att) + self.modState2(mod) + self.lastState(new)))
+        # Shapes: (batch_size, seq_len)
+        log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
+        log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+
+        return log_p1, log_p2
+    
+class BiDAFOutputRnnMulti(nn.Module):
+    """Output layer used by BiDAF for question answering.
+    Computes a linear transformation of the attention and modeling
+    outputs, then takes the softmax of the result to get the start pointer.
+    A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
+    A second linear+softmax of the attention output and `mod_2` is used
+    to get the end pointer.
+    Args:
+        hidden_size (int): Hidden size used in the BiDAF model.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, drop_prob):
+        super(BiDAFOutputRnnMulti, self).__init__()
+        self.drop_prob = drop_prob
+        self.attn_size = 100
+        self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
+        self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
+        self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
+        self.attn_proj = nn.Linear(self.attn_size, 1)
+        self.question_attn = nn.Linear(2 * hidden_size, self.attn_size)
+        
+       # self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
+                         #                 drop_prob = drop_prob)
+        
+        self.ansPoint = torch.nn.RNN(input_size = 2 * hidden_size, 
+                            hidden_size = 2 * hidden_size, 
+                            num_layers = 1, dropout = drop_prob, batch_first = True)
+        
+        self.rnn = RNNEncoder(input_size=2 * hidden_size,
+                              hidden_size= hidden_size,
+                              num_layers=1,
+                              drop_prob=drop_prob)
+        
+        self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
+        self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
+
+
+    def forward(self, q, q_mask, mod, mask):
+        questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
+        init = torch.bmm(nu.unsqueeze(1), q)
+        
+        
+        logits_1 = self.attn_proj(self.modState(mod) + self.lastState(init))
+        b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
+        WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
+        new, _ = self.ansPoint(WeightedB1, torch.transpose(init, 0, 1))
+        new = F.dropout(new, self.drop_prob, self.training)
+        mod = self.rnn(mod, mask.sum(-1))
+        
+        logits_2 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
