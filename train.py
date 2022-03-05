@@ -23,10 +23,13 @@ from models import BiDAFCharRNNOutput
 from models import SelfAttention
 from models import RnnOutput
 from models import BiDAFChar
+from models import RNET
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
 from util import collate_fn, SQuAD
+
+acceptingCharacterEmbeds = True
 
 
 def main(args):
@@ -64,12 +67,11 @@ def main(args):
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
     '''
-    #'''
+    '''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
-    acceptingCharacterEmbeds = False
-    #'''
+    '''
     '''
     model = SelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
@@ -80,12 +82,18 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    '''
+    #'''
     model = BiDAFCharRNNOutput(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
+    #'''
+    '''
+    model = RNET(word_vectors=word_vectors,
+                 char_vectors=char_vectors,
+                  hidden_size=args.hidden_size,
+                  drop_prob=args.drop_prob)
     '''
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
@@ -208,7 +216,6 @@ def main(args):
 def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
     nll_meter = util.AverageMeter()
     
-    acceptingCharacterEmbeds = True
 
     model.eval()
     pred_dict = {}
@@ -227,9 +234,9 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
                 qc_idxs = qc_idxs.to(device)
 
             # Forward
-            if(not acceptingCharacterEmbeds):
+            if(acceptingCharacterEmbeds == False):
                 log_p1, log_p2 = model(cw_idxs, qw_idxs)
-            else:
+            elif(acceptingCharacterEmbeds == True):
                 log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
             y1, y2 = y1.to(device), y2.to(device)
             loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
