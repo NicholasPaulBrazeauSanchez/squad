@@ -407,7 +407,7 @@ class DAFAttention(nn.Module):
         incoming = gate * incoming
         #processed = self.matcher(incoming, preserved)
         #processed = F.dropout(processed, self.drop_prob, self.training)
-        return processed
+        return incoming
     
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
