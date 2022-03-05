@@ -673,8 +673,10 @@ class BiDAFOutputRnnMulti(nn.Module):
         self.drop_prob = drop_prob
         self.attn_size = 100
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
+        self.lastStateVar = nn.Linear(2 * hidden_size, 1)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
         self.Attn1var = nn.Linear(8 * hidden_size, 1)
+        self.Attn2var = nn.Linear(8 * hidden_size, 1)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
         self.question_attn = nn.Linear(2 * hidden_size, self.attn_size)
@@ -694,23 +696,27 @@ class BiDAFOutputRnnMulti(nn.Module):
         
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.modStateVar = nn.Linear(2 * hidden_size, 1, bias = False)
+        self.modStateVar2 = nn.Linear(2 * hidden_size, 1, bias = False)
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
     def forward(self, att, q, q_mask, mod, mask):
-        questAtt = self.attn_proj(torch.relu(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        #questAtt = self.attn_proj(torch.relu(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         
         
-        logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
+        #logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
+        logits_1 = self.Attn1var(att) + self.modStateVar(mod) + self.lastStateVar(init)
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
         WeightedB1 = torch.bmm(b1.unsqueeze(1), mod)
         new, _ = self.ansPoint(WeightedB1, torch.transpose(init, 0, 1))
         new = F.dropout(new, self.drop_prob, self.training)
         mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.Attn1(att) + self.modState(mod) + self.lastState(new)))
+        #logits_2 = self.attn_proj(torch.tanh(self.Attn1(att) + self.modState(mod) + self.lastState(new)))
+        logits_2 = self.Attn2var(att) + self.modStateVar2(mod) + self.lastStateVar(new)
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
