@@ -152,7 +152,7 @@ class BiDAFChar(nn.Module):
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
-                                     num_layers=2,
+                                     num_layers=1,
                                      drop_prob=drop_prob)
 
         self.out = layers.BiDAFOutput(hidden_size=hidden_size,
@@ -273,7 +273,7 @@ class BiDAFCharRNNOutput(nn.Module):
 
         self.enc = layers.RNNEncoder(input_size=2 * hidden_size,
                                      hidden_size=hidden_size,
-                                     num_layers=2,
+                                     num_layers=1,
                                      drop_prob=drop_prob)
 
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
