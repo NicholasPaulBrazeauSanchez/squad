@@ -70,7 +70,7 @@ class EmbeddingWithChar(nn.Module):
         embChar = embChar.permute((0, 3, 1, 2))
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
-        #embChar = self.relu(embChar)
+        embChar = F.relu(embChar)
         
         embChar = self.maxpool(embChar).squeeze(3)
         
@@ -616,7 +616,6 @@ class BiDAFOutputRnn(nn.Module):
         self.drop_prob = drop_prob
         self.attn_size = 100
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
-        self.lastState2 = nn.Linear(2 * hidden_size, self.attn_size)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
         self.attn_proj = nn.Linear(self.attn_size, 1)
@@ -651,7 +650,7 @@ class BiDAFOutputRnn(nn.Module):
         new = F.dropout(new, self.drop_prob, self.training)
         mod = self.rnn(mod, mask.sum(-1))
         
-        logits_2 = self.attn_proj(torch.tanh(self.Attn2(att) + self.modState2(mod) + self.lastState2(new)))
+        logits_2 = self.attn_proj(torch.tanh(self.Attn2(att) + self.modState2(mod) + self.lastState(new)))
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
