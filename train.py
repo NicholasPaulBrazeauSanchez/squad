@@ -119,7 +119,7 @@ def main(args):
     # set the learning rate to 1/2
     #scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
     #scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
-    scheduler = sched.StepLR(optimizer, step_size=7813, gamma = 0.707)
+    scheduler = sched.StepLR(optimizer, step_size=7813, gamma = 0.4472)
 
     # Get data loader
     log.info('Building dataset...')
