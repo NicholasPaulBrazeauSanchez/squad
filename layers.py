@@ -675,14 +675,23 @@ class BiDAFOutputRnn(nn.Module):
                               num_layers=1,
                               drop_prob=drop_prob)
         
+        self.selfAttn = nn.MultiheadAttention(2* hidden_size, num_heads = 1, 
+                                              dropout = drop_prob, 
+                                              batch_first= True)
+        
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
     def forward(self, att, q, q_mask, mod, mask):
+        '''
         questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        #questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
+        '''
+        repo = self.attnInit.repeat(q.shape[0], 1, 1)
+        init, _ = self.selfAttn(repo, q, q, key_padding_mask = ~q_mask)
         
         
         logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
