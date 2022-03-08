@@ -275,6 +275,44 @@ class selfAttention2(nn.Module):
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
     
+class CoAttention(nn.Module):
+    """
+    """
+    def __init__(self, hidden_size, drop_prob=0.1):
+        super(CoAttention, self).__init__()
+        self.drop_prob = drop_prob
+        # self.biLSTM = nn.LSTM(hidden_size=hidden_size, bidirectional=True)
+        self.bias = nn.Parameter(torch.zeros(1))
+
+    def forward(self, c, q, c_mask, q_mask):
+        batch_size, c_len, _ = c.size()
+        q_len = q.size(1)
+        # print("\nBatch_size. c_len, q_len", batch_size, c_len, q_len)
+        # print("c size",  c.size())
+        # print("q size", q.size())
+        L = torch.bmm(c, q.transpose(1, 2))  # (batch_size, c_len, q_len)
+        # print("L size", L.size())
+        c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
+        q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
+
+        ac = masked_softmax(L, q_mask, dim=2)  # (batch_size, c_len, q_len)
+        aq = masked_softmax(L, c_mask, dim=1)  # (batch_size, c_len, q_len)
+        # print("ac size", ac.size())
+        # print("aq size", aq.size())
+
+        Cq = torch.bmm(c.transpose(1,2), aq)
+        # print("Cq size", Cq.size())
+        # 64, 200, 23
+        # 64, 23, 200
+        concatenated = torch.cat((q.transpose(1,2),Cq), axis=1)
+        # print("concatenated size", concatenated.size())
+        Cc = torch.bmm(concatenated, ac.transpose(1,2))
+        # print("CC size", Cc.size())
+
+        out = torch.cat((c, Cc.transpose(1,2)), axis=2)
+        # print("out size", out.size())
+        return out
+    
 
 
 class encoderBlock(nn.Module):
