@@ -676,7 +676,7 @@ class BiDAFOutputRnnMulti(nn.Module):
         super(BiDAFOutputRnnMulti, self).__init__()
         self.drop_prob = drop_prob
         self.attn_size = hidden_size
-        self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
+        self.lastState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.lastStateVar = nn.Linear(2 * hidden_size, 1)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size, bias = False)
         self.Attn1var = nn.Linear(8 * hidden_size, 1)
