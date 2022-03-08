@@ -517,7 +517,7 @@ class SelfAttentionRNNOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(SelfAttentionRNNOutput, self).__init__()
-        self.attention_size = 100
+        self.attention_size = hidden_size
         self.att_linear_1 = nn.Linear(4 * hidden_size, self.attention_size, 
                                       bias = False)
         self.rnn_linear_1 = nn.Linear(2 * hidden_size, self.attention_size, 
@@ -618,7 +618,7 @@ class BiDAFOutputRnn(nn.Module):
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputRnn, self).__init__()
         self.drop_prob = drop_prob
-        self.attn_size = 100
+        self.attn_size = hidden_size
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
@@ -675,7 +675,7 @@ class BiDAFOutputRnnMulti(nn.Module):
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutputRnnMulti, self).__init__()
         self.drop_prob = drop_prob
-        self.attn_size = 100
+        self.attn_size = hidden_size
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.lastStateVar = nn.Linear(2 * hidden_size, 1)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size, bias = False)
