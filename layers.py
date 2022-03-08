@@ -257,7 +257,7 @@ class selfAttention2(nn.Module):
         self.drop_prob = drop_prob
         
         self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
-        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 4, 
+        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
                                               dropout = drop_prob, 
                                               batch_first= True)
         self.RelevanceGate = nn.Linear(2 * input_size, 2 * input_size, bias = False)
