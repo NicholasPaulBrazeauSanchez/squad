@@ -53,7 +53,7 @@ class EmbeddingWithChar(nn.Module):
         self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
         self.conv = nn.Conv2d(in_channels = char_vectors.size(1), 
                               out_channels = hidden_size,
-                              kernel_size = (1,5), bias = False)
+                              kernel_size = (1,5), bias = True)
         #probably bad to hardcode shapes like this, but it'll do
         self.maxpool = nn.MaxPool2d((1,12))
         self.hwy = HighwayEncoder(2, 2 * hidden_size)
@@ -65,13 +65,15 @@ class EmbeddingWithChar(nn.Module):
         #this is legit
         embChar = self.embedChar(xchar) # (batch_Size, seq_len, char_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
-        embChar = F.dropout(embChar, self.drop_prob, self.training)
+        embChar = F.dropout(embChar, 0.5 * self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         #hit embChar with a 2dconv, and then a highway
         embChar = embChar.permute((0, 3, 1, 2))
         embChar = self.conv(embChar)# (batch_size, seq_len, hidden_size)
         # I don't think the relu is helping
-        embChar = F.relu(embChar)
+        #embChar = F.relu(embChar)
+        
+        
        # embChar = F.dropout(embChar, self.drop_prob, self.training)
         
         embChar = self.maxpool(embChar).squeeze(3)
