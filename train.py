@@ -17,19 +17,11 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAF
-from models import RNNOutputSelfAttention
-from models import BiDAFCharRNNOutput
-from models import SelfAttention
-from models import RnnOutput
-from models import BiDAFChar
-from models import RNET
+from models import BiDAF, BiDAFwithCoAttention
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
 from util import collate_fn, SQuAD
-
-acceptingCharacterEmbeds = True
 
 
 def main(args):
@@ -55,46 +47,10 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    '''
-    model = BiDAF(word_vectors=word_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    '''
-    '''
-    model = BiDAFChar(word_vectors=word_vectors,
-                      char_vectors=char_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    acceptingCharacterEmbeds = True
-    '''
-    '''
-    model = RNNOutputSelfAttention(word_vectors=word_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    '''
-    '''
-    model = SelfAttention(word_vectors=word_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    '''
-    '''
-    model = RnnOutput(word_vectors=word_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    '''
-    #'''
-    model = BiDAFCharRNNOutput(word_vectors=word_vectors,
-                      char_vectors=char_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    acceptingCharacterEmbeds = True
-    #'''
-    '''
-    model = RNET(word_vectors=word_vectors,
-                 char_vectors=char_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
-    '''
+    model = BiDAFwithCoAttention(word_vectors=word_vectors,
+                                 char_vectors=char_vectors,
+                                 hidden_size=args.hidden_size,
+                                 medrop_prob=args.drop_prob)
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
@@ -113,13 +69,9 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
-
     optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd, eps = 1e-6)
-    # set the learning rate to 1/2
-    #scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
-    #scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
-    scheduler = sched.StepLR(optimizer, step_size=15625, gamma = 0.5)
+                               weight_decay=args.l2_wd)
+    scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')
@@ -149,19 +101,11 @@ def main(args):
                 # Setup for forward
                 cw_idxs = cw_idxs.to(device)
                 qw_idxs = qw_idxs.to(device)
-                
-                if(acceptingCharacterEmbeds):
-                    cc_idxs = cc_idxs.to(device)
-                    qc_idxs = qc_idxs.to(device)
-                
                 batch_size = cw_idxs.size(0)
                 optimizer.zero_grad()
 
                 # Forward
-                if(not acceptingCharacterEmbeds):
-                    log_p1, log_p2 = model(cw_idxs, qw_idxs)
-                else:
-                    log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
+                log_p1, log_p2 = model(cw_idxs, qw_idxs)
                 y1, y2 = y1.to(device), y2.to(device)
                 loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 loss_val = loss.item()
@@ -215,7 +159,6 @@ def main(args):
 
 def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
     nll_meter = util.AverageMeter()
-    
 
     model.eval()
     pred_dict = {}
@@ -228,16 +171,9 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
             cw_idxs = cw_idxs.to(device)
             qw_idxs = qw_idxs.to(device)
             batch_size = cw_idxs.size(0)
-            
-            if(acceptingCharacterEmbeds):
-                cc_idxs = cc_idxs.to(device)
-                qc_idxs = qc_idxs.to(device)
 
             # Forward
-            if(acceptingCharacterEmbeds == False):
-                log_p1, log_p2 = model(cw_idxs, qw_idxs)
-            elif(acceptingCharacterEmbeds == True):
-                log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
+            log_p1, log_p2 = model(cw_idxs, qw_idxs)
             y1, y2 = y1.to(device), y2.to(device)
             loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
             nll_meter.update(loss.item(), batch_size)
