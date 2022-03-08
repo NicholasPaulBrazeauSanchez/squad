@@ -480,7 +480,7 @@ class RnnOutput(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutputRnn(hidden_size=hidden_size, drop_prob=drop_prob)
+        self.out = layers.BiDAFOutputRnnMulti(hidden_size=hidden_size, drop_prob=drop_prob)
         
     def forward(self, cw_idxs, qw_idxs):
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
