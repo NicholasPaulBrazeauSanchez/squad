@@ -270,8 +270,8 @@ class selfAttention2(nn.Module):
         attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
-        #gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        #nuevo = gate * nuevo
+        gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
     
