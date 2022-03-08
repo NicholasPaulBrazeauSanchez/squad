@@ -24,6 +24,7 @@ from models import SelfAttention
 from models import RnnOutput
 from models import BiDAFChar
 from models import RNET
+from models import BiDAFCharRNNOutputCoatt
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -89,12 +90,20 @@ def main(args):
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
     '''
-    #'''
+    '''
     model = RNET(word_vectors=word_vectors,
                  char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
+    '''
     #'''
+    model = BiDAFCharRNNOutputCoatt(word_vectors=word_vectors,
+                      char_vectors=char_vectors,
+                  hidden_size=args.hidden_size,
+                  drop_prob=args.drop_prob)
+    acceptingCharacterEmbeds = True
+    #'''
+    
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
