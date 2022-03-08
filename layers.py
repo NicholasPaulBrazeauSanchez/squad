@@ -65,7 +65,7 @@ class EmbeddingWithChar(nn.Module):
         #this is legit
         embChar = self.embedChar(xchar) # (batch_Size, seq_len, char_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
-        embChar = F.dropout(embChar, 0.5 * self.drop_prob, self.training)
+        embChar = F.dropout(embChar, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         #hit embChar with a 2dconv, and then a highway
         embChar = embChar.permute((0, 3, 1, 2))
