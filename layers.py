@@ -679,6 +679,9 @@ class BiDAFOutputRnn(nn.Module):
                                               dropout = drop_prob, 
                                               batch_first= True)
         
+        self.attnInit = nn.Parameter(torch.zeros(1, 1, 2 * hidden_size))
+        nn.init.xavier_uniform_(self.attnInit)
+        
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
