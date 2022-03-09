@@ -84,8 +84,8 @@ class RNET(nn.Module):
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                         drop_prob=drop_prob)
         
-        #self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
-        #                                 drop_prob=drop_prob)
+        self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
         '''
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
@@ -123,6 +123,65 @@ class RNET(nn.Module):
         mod = self.dos(mod, c_mask)
 
         out = self.out(att, q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+
+        return out
+    
+class SelfAttChar(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.):
+        super(SelfAttChar, self).__init__()
+        self.emb = layers.EmbeddingWithChar(word_vectors=word_vectors,
+                                            char_vectors=char_vectors,
+                                    hidden_size=hidden_size,
+                                    drop_prob=drop_prob)
+
+        self.enc = layers.RNNEncoder(input_size=2 * hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                        drop_prob=drop_prob)
+        
+        self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
+        '''
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=2,
+                                     drop_prob=drop_prob)
+        '''
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+        
+        self.dos = layers.selfAttention3(2* hidden_size, hidden_size= hidden_size, 
+                                                drop_prob = drop_prob)
+        
+        self.out = layers.BiDAFOutput(hidden_size=hidden_size,
+                                      drop_prob=drop_prob)
+
+    def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
+        c_mask = torch.zeros_like(cw_idxs) != cw_idxs
+        q_mask = torch.zeros_like(qw_idxs) != qw_idxs
+        cc_mask = torch.zeros_like(cc_idxs) != cc_idxs
+        qc_mask = torch.zeros_like(qc_idxs) != qc_idxs
+        c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+        c_emb = self.emb(cw_idxs, cc_idxs, cc_mask)         # (batch_size, c_len, 2* hidden_size)
+        q_emb = self.emb(qw_idxs, qc_idxs, qc_mask)         # (batch_size, q_len, 2* hidden_size)
+
+        c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
+        q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
+
+        att = self.att(c_enc, q_enc,
+                       c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
+
+        mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
+        
+        mod = self.dos(mod, c_mask)
+
+        out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
     
