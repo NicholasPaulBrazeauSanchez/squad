@@ -309,7 +309,7 @@ class selfAttention3(nn.Module):
         nuevo = torch.cat([v, attended], dim=2) 
         gate = torch.sigmoid(self.RelevanceGate(nuevo))
         nuevo = gate * nuevo
-        nuevoDos = self.Projector(nuevo, c_mask.sum(-1))
+        nuevoDos = self.Projector(nuevo)
         return nuevoDos
     
     
