@@ -292,7 +292,7 @@ class selfAttention3(nn.Module):
         super(selfAttention3, self).__init__()
         self.drop_prob = drop_prob
         
-        #self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
+        self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
         self.Projector = nn.Linear(2 * input_size, 2 * hidden_size, bias = False)
         self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
                                               batch_first= True, bias = False)
@@ -307,9 +307,9 @@ class selfAttention3(nn.Module):
         attended = F.dropout(attended, self.drop_prob, self.training)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
-        gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        nuevoDos = gate * nuevo
-        nuevoDos = self.Projector(nuevo)
+        #gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        #nuevoDos = gate * nuevo
+        nuevoDos = self.Rnn(nuevo)
         return nuevoDos
     
     
