@@ -806,6 +806,7 @@ class BiDAFOutputRnnMulti(nn.Module):
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         '''
+        # this is the best yet!
         repo = self.attnInit.repeat(q.shape[0], 1, 1)
         init, _ = self.selfAttn(repo, q, q, key_padding_mask = ~q_mask)
         logits_1 = self.attn_proj(torch.tanh(self.modState(mod) + self.lastState(init)))
