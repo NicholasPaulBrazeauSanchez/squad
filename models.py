@@ -84,12 +84,12 @@ class RNET(nn.Module):
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                          drop_prob=drop_prob)
 
-        self.mod = layers.ForwardRNNEncoder(input_size=8 * hidden_size,
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
                                      num_layers=2,
                                      drop_prob=drop_prob)
         
-        self.dos = layers.selfAttention3(hidden_size, hidden_size= hidden_size, 
+        self.dos = layers.selfAttention3(2* hidden_size, hidden_size= hidden_size, 
                                                 drop_prob = drop_prob)
         
         self.out = layers.BiDAFOutputRnnMulti(hidden_size=hidden_size, drop_prob=drop_prob)
