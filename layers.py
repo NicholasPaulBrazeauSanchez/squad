@@ -275,6 +275,44 @@ class selfAttention2(nn.Module):
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
     
+class selfAttention3(nn.Module):
+    """Self attention RNN encoder
+    Encoded output is the RNN's hidden state at each position, which
+    has shape `(batch_size, seq_len, hidden_size * 2)`.
+    Args:
+        input_size (int): Size of a single timestep in the input.
+        hidden_size (int): Size of the RNN hidden state.
+        num_layers (int): Number of layers of RNN cells to use.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self,
+                 input_size,
+                 hidden_size,
+                 drop_prob=0.):
+        super(selfAttention3, self).__init__()
+        self.drop_prob = drop_prob
+        
+        #self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
+        self.Projector = nn.Linear(2 * hidden_size, hidden_size, bias = False)
+        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
+                                              dropout = drop_prob, 
+                                              batch_first= True, bias = False)
+        self.RelevanceGate = nn.Linear(2 * input_size, 2 * input_size, bias = False)
+        
+
+    def forward(self, v, c_mask):
+        # Save original padded length for use by pad_packed_sequence
+        # may need to run v_0 through things
+        key_mask = ~c_mask
+        attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
+        #attended may not be enough?
+        nuevo = torch.cat([v, attended], dim=2) 
+        gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        nuevo = gate * nuevo
+        nuevoDos = self.Projector(nuevo, c_mask.sum(-1))
+        return nuevoDos
+    
+    
 class CoAttention(nn.Module):
     """
     """
