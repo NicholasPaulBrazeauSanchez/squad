@@ -142,8 +142,8 @@ class SelfAttChar(nn.Module):
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                         drop_prob=drop_prob)
         
-        self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
-                                         drop_prob=drop_prob)
+        #self.att = layers.DAFAttention(hidden_size=2 * hidden_size,
+         #                                drop_prob=drop_prob)
         '''
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
