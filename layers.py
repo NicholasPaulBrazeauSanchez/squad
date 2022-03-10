@@ -465,7 +465,6 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1)
         self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
 
     def forward(self, c, q, c_mask, q_mask):
@@ -482,8 +481,8 @@ class DAFAttention(nn.Module):
         incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-        #gate = torch.sigmoid(self.RelevanceGate(incoming))
-        #incoming = gate * incoming
+        gate = torch.sigmoid(self.RelevanceGate(incoming))
+        incoming = gate * incoming
         #processed = self.matcher(incoming, preserved)
         #processed = F.dropout(processed, self.drop_prob, self.training)
         return incoming
@@ -887,25 +886,25 @@ class LinearSelfAttentionOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(LinearSelfAttentionOutput, self).__init__()
-        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_1 = nn.Linear(4 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(6 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
-        self.rnn = RNNEncoder(input_size=4 * hidden_size,
-                              hidden_size= 2* hidden_size,
+        self.rnn = RNNEncoder(input_size=2 * hidden_size,
+                              hidden_size=hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
-        
-        
-        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_2 = nn.Linear(4 * hidden_size, 1)
+
+        self.att_linear_2 = nn.Linear(6 * hidden_size, 1)
+        self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
+        # Shapes: (batch_size, seq_len, 1)
         logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
+
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
-        
 
         return log_p1, log_p2
