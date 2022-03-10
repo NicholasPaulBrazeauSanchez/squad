@@ -414,7 +414,7 @@ class BiDAFCharRNNOutputCoatt(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutputRnnMulti(hidden_size=hidden_size,
+        self.out = layers.LinearSelfAttentionOutput(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
