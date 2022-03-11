@@ -24,6 +24,7 @@ from json import dumps
 from models import BiDAF
 from models import RnnOutput
 from models import BiDAFCharRNNOutput
+from models import RNET
 from os.path import join
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
@@ -50,7 +51,7 @@ def main(args):
     #              hidden_size=args.hidden_size)
     #model = RnnOutput(word_vectors=word_vectors,
     #                  hidden_size=args.hidden_size)
-    model = BiDAFCharRNNOutput(word_vectors=word_vectors,
+    model = RNET(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size)
     acceptingCharacterEmbeds = True
