@@ -257,9 +257,9 @@ class selfAttention2(nn.Module):
         self.drop_prob = drop_prob
         
         self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
-        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
+        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 4, 
                                               dropout = drop_prob, 
-                                              batch_first= True, bias = False)
+                                              batch_first= True)
         self.RelevanceGate = nn.Linear(2 * input_size, 2 * input_size, bias = False)
         
 
@@ -274,82 +274,6 @@ class selfAttention2(nn.Module):
         nuevo = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
-    
-class selfAttention3(nn.Module):
-    """Self attention RNN encoder
-    Encoded output is the RNN's hidden state at each position, which
-    has shape `(batch_size, seq_len, hidden_size * 2)`.
-    Args:
-        input_size (int): Size of a single timestep in the input.
-        hidden_size (int): Size of the RNN hidden state.
-        num_layers (int): Number of layers of RNN cells to use.
-        drop_prob (float): Probability of zero-ing out activations.
-    """
-    def __init__(self,
-                 input_size,
-                 hidden_size,
-                 drop_prob=0.):
-        super(selfAttention3, self).__init__()
-        self.drop_prob = drop_prob
-        
-        self.Rnn = RNNEncoder(2 * input_size , hidden_size, 1, drop_prob = drop_prob)
-        self.Projector = nn.Linear(2 * input_size, 2 * hidden_size, bias = False)
-        self.selfAttn = nn.MultiheadAttention(input_size, num_heads = 1, 
-                                              batch_first= True, bias = False)
-        self.RelevanceGate = nn.Linear(2 * input_size, 2 * input_size, bias = False)
-        
-
-    def forward(self, v, c_mask):
-        # Save original padded length for use by pad_packed_sequence
-        # may need to run v_0 through things
-        key_mask = ~c_mask
-        attended, _ = self.selfAttn(v, v, v, key_padding_mask = key_mask)
-        attended = F.dropout(attended, self.drop_prob, self.training)
-        #attended may not be enough?
-        nuevo = torch.cat([v, attended], dim=2) 
-        gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        nuevoDos = gate * nuevo
-        nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
-        return nuevoDos
-    
-    
-class CoAttention(nn.Module):
-    """
-    """
-    def __init__(self, hidden_size, drop_prob=0.1):
-        super(CoAttention, self).__init__()
-        self.drop_prob = drop_prob
-        # self.biLSTM = nn.LSTM(hidden_size=hidden_size, bidirectional=True)
-        self.bias = nn.Parameter(torch.zeros(1))
-
-    def forward(self, c, q, c_mask, q_mask):
-        batch_size, c_len, _ = c.size()
-        q_len = q.size(1)
-        # print("\nBatch_size. c_len, q_len", batch_size, c_len, q_len)
-        # print("c size",  c.size())
-        # print("q size", q.size())
-        L = torch.bmm(c, q.transpose(1, 2))  # (batch_size, c_len, q_len)
-        # print("L size", L.size())
-        c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
-        q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
-
-        ac = masked_softmax(L, q_mask, dim=2)  # (batch_size, c_len, q_len)
-        aq = masked_softmax(L, c_mask, dim=1)  # (batch_size, c_len, q_len)
-        # print("ac size", ac.size())
-        # print("aq size", aq.size())
-
-        Cq = torch.bmm(c.transpose(1,2), aq)
-        # print("Cq size", Cq.size())
-        # 64, 200, 23
-        # 64, 23, 200
-        concatenated = torch.cat((q.transpose(1,2),Cq), axis=1)
-        # print("concatenated size", concatenated.size())
-        Cc = torch.bmm(concatenated, ac.transpose(1,2))
-        # print("CC size", Cc.size())
-
-        out = torch.cat((c, Cc.transpose(1,2)), axis=2)
-        # print("out size", out.size())
-        return out
     
 
 
@@ -465,6 +389,7 @@ class DAFAttention(nn.Module):
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
+        self.matcher = RNNEncoder(2 * hidden_size, hidden_size, num_layers = 1)
         self.RelevanceGate = nn.Linear(2 * hidden_size, 2 * hidden_size, bias = False)
 
     def forward(self, c, q, c_mask, q_mask):
@@ -481,8 +406,8 @@ class DAFAttention(nn.Module):
         incoming = torch.cat([c, a], dim = 2)
 
         #x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
-        gate = torch.sigmoid(self.RelevanceGate(incoming))
-        incoming = gate * incoming
+        #gate = torch.sigmoid(self.RelevanceGate(incoming))
+        #incoming = gate * incoming
         #processed = self.matcher(incoming, preserved)
         #processed = F.dropout(processed, self.drop_prob, self.training)
         return incoming
@@ -643,13 +568,11 @@ class SelfAttentionRNNOutput(nn.Module):
     
 class BiDAFOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
-
     Computes a linear transformation of the attention and modeling
     outputs, then takes the softmax of the result to get the start pointer.
     A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
     A second linear+softmax of the attention output and `mod_2` is used
     to get the end pointer.
-
     Args:
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
@@ -712,26 +635,14 @@ class BiDAFOutputRnn(nn.Module):
                               num_layers=1,
                               drop_prob=drop_prob)
         
-        self.selfAttn = nn.MultiheadAttention(2* hidden_size, num_heads = 1, 
-                                              dropout = drop_prob, 
-                                              batch_first= True, bias = False)
-        
-        self.attnInit = nn.Parameter(torch.zeros(1, 1, 2 * hidden_size))
-        nn.init.xavier_uniform_(self.attnInit)
-        
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.modState2 = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
 
 
     def forward(self, att, q, q_mask, mod, mask):
-        '''
         questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
-        #questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
-        '''
-        repo = self.attnInit.repeat(q.shape[0], 1, 1)
-        init, _ = self.selfAttn(repo, q, q, key_padding_mask = ~q_mask)
         
         
         logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
@@ -886,25 +797,25 @@ class LinearSelfAttentionOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super(LinearSelfAttentionOutput, self).__init__()
-        self.att_linear_1 = nn.Linear(6 * hidden_size, 1)
-        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(4 * hidden_size, 1)
 
-        self.rnn = RNNEncoder(input_size=2 * hidden_size,
-                              hidden_size=hidden_size,
+        self.rnn = RNNEncoder(input_size=4 * hidden_size,
+                              hidden_size= 2* hidden_size,
                               num_layers=1,
                               drop_prob=drop_prob)
-
-        self.att_linear_2 = nn.Linear(6 * hidden_size, 1)
-        self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
+        
+        
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_2 = nn.Linear(4 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
-        # Shapes: (batch_size, seq_len, 1)
         logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
         mod_2 = self.rnn(mod, mask.sum(-1))
         logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
-
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
+        
 
         return log_p1, log_p2
