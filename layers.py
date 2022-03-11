@@ -49,7 +49,7 @@ class EmbeddingWithChar(nn.Module):
         super(EmbeddingWithChar, self).__init__()
         self.drop_prob = drop_prob
         self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.embedChar = nn.Embedding.from_pretrained(char_vectors)
+        self.embedChar = nn.Embedding.from_pretrained(char_vectors, freeze=False)
         self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
         self.conv = nn.Conv2d(in_channels = char_vectors.size(1), 
                               out_channels = hidden_size,
@@ -767,8 +767,8 @@ class BiDAFOutputRnnMulti(nn.Module):
         self.Attn1var = nn.Linear(8 * hidden_size, 1)
         self.Attn2var = nn.Linear(8 * hidden_size, 1)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size, bias = False)
-        self.attn_proj = nn.Linear(self.attn_size, 1)
-        self.question_attn = nn.Linear(2 * hidden_size, self.attn_size)
+        self.attn_proj = nn.Linear(self.attn_size, 1, bias = False)
+        self.question_attn = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         self.question_attn_var = nn.Linear(2 * hidden_size, 1)
         
        # self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
@@ -787,7 +787,8 @@ class BiDAFOutputRnnMulti(nn.Module):
                                               dropout = drop_prob, 
                                               batch_first= True)
         
-        self.attnInit = nn.Parameter(torch.zeros(1, 1, 2 * hidden_size))
+        self.attnInit = nn.Parameter(torch.zeros(1, 2 * hidden_size))
+        self.initProj = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         nn.init.xavier_uniform_(self.attnInit)
         
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
@@ -799,7 +800,6 @@ class BiDAFOutputRnnMulti(nn.Module):
     def forward(self, att, q, q_mask, mod, mask):
         '''
         questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
-        #questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         '''
