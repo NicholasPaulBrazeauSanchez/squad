@@ -52,8 +52,7 @@ def main(args):
     #                  hidden_size=args.hidden_size)
     model = BiDAFCharRNNOutput(word_vectors=word_vectors,
                       char_vectors=char_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
+                  hidden_size=args.hidden_size)
     acceptingCharacterEmbeds = True
     model = nn.DataParallel(model, gpu_ids)
     log.info(f'Loading checkpoint from {args.load_path}...')
