@@ -307,8 +307,8 @@ class selfAttention3(nn.Module):
         attended = F.dropout(attended, self.drop_prob, self.training)
         #attended may not be enough?
         nuevo = torch.cat([v, attended], dim=2) 
-        gate = torch.sigmoid(self.RelevanceGate(nuevo))
-        nuevoDos = gate * nuevo
+        #gate = torch.sigmoid(self.RelevanceGate(nuevo))
+        #nuevoDos = gate * nuevo
         nuevoDos = self.Rnn(nuevo, c_mask.sum(-1))
         return nuevoDos
     
