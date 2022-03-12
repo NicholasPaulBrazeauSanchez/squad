@@ -62,13 +62,13 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    #'''
+    '''
     model = BiDAFChar(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-   # '''
+    '''
     '''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
@@ -84,13 +84,13 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    '''
+    #'''
     model = BiDAFCharRNNOutput(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    '''
+    #'''
     '''
     model = RNET(word_vectors=word_vectors,
                  char_vectors=char_vectors,
@@ -135,8 +135,8 @@ def main(args):
                                weight_decay=args.l2_wd, eps = 1e-6)
     # set the learning rate to 1/2
     #scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
-    #scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
-    scheduler = sched.StepLR(optimizer, step_size=15625, gamma = 0.5)
+    scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
+    #scheduler = sched.StepLR(optimizer, step_size=15625, gamma = 0.5)
 
     # Get data loader
     log.info('Building dataset...')
