@@ -135,8 +135,8 @@ def main(args):
                                weight_decay=args.l2_wd, eps = 1e-6)
     # set the learning rate to 1/2
     #scheduler = sched.LambdaLR(optimizer, lambda s: ((s >= 5) * 0.5 + 0.5))  # Constant LR
-    #scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
-    scheduler = sched.StepLR(optimizer, step_size=15625, gamma = 0.7)
+    scheduler = sched.LambdaLR(optimizer, lambda s: 1) 
+    #scheduler = sched.StepLR(optimizer, step_size=15625, gamma = 0.7)
 
     # Get data loader
     log.info('Building dataset...')
