@@ -695,8 +695,8 @@ class BiDAFOutputRnn(nn.Module):
         self.lastState = nn.Linear(2 * hidden_size, self.attn_size)
         self.Attn1 = nn.Linear(8 * hidden_size, self.attn_size)
         self.Attn2 = nn.Linear(8 * hidden_size, self.attn_size)
-        self.attn_proj = nn.Linear(self.attn_size, 1)
-        self.question_attn = nn.Linear(2 * hidden_size, self.attn_size)
+        self.attn_proj = nn.Linear(self.attn_size, 1, bias = False)
+        self.question_attn = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
         
        # self.ansPoint = ForwardRNNEncoder(2 * hidden_size, 2 * hidden_size, 1, 
                          #                 drop_prob = drop_prob)
@@ -714,7 +714,8 @@ class BiDAFOutputRnn(nn.Module):
                                               dropout = drop_prob, 
                                               batch_first= True, bias = False)
         
-        self.attnInit = nn.Parameter(torch.zeros(1, 1, 2 * hidden_size))
+        self.init_attn = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
+        self.attnInit = nn.Parameter(torch.zeros(1, 2 * hidden_size))
         nn.init.xavier_uniform_(self.attnInit)
         
         self.modState = nn.Linear(2 * hidden_size, self.attn_size, bias = False)
@@ -722,15 +723,15 @@ class BiDAFOutputRnn(nn.Module):
 
 
     def forward(self, att, q, q_mask, mod, mask):
-        '''
-        questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2))) # Shape: (batch, q_len, 1)
+        
+        questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2) + self.init_attn(self.init))) # Shape: (batch, q_len, 1)
         #questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
         init = torch.bmm(nu.unsqueeze(1), q)
         '''
         repo = self.attnInit.repeat(q.shape[0], 1, 1)
         init, _ = self.selfAttn(repo, q, q, key_padding_mask = ~q_mask)
-        
+        '''
         
         logits_1 = self.attn_proj(self.Attn1(att) + self.modState(mod) + self.lastState(init))
         b1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=False)
