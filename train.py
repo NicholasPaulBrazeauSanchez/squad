@@ -62,13 +62,13 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    '''
+    #'''
     model = BiDAFChar(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    '''
+    #'''
     '''
     model = RNNOutputSelfAttention(word_vectors=word_vectors,
                   hidden_size=args.hidden_size,
@@ -104,13 +104,13 @@ def main(args):
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
     '''
-    #'''
+    '''
     model = SelfAttChar(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    #'''
+    '''
     
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
