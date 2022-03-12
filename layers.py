@@ -49,7 +49,7 @@ class EmbeddingWithChar(nn.Module):
         super(EmbeddingWithChar, self).__init__()
         self.drop_prob = drop_prob
         self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.embedChar = nn.Embedding.from_pretrained(char_vectors, freeze=False)
+        self.embedChar = nn.Embedding.from_pretrained(char_vectors, freeze=False, padding_idx = 0)
         self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
         self.conv = nn.Conv2d(in_channels = char_vectors.size(1), 
                               out_channels = hidden_size,
