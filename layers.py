@@ -723,8 +723,6 @@ class BiDAFOutputRnn(nn.Module):
 
 
     def forward(self, att, q, q_mask, mod, mask):
-        print(q.shape)
-        print(self.attnInit.shape)
         questAtt = self.attn_proj(torch.tanh(self.question_attn(q).squeeze(2) + self.init_attn(self.attnInit))) # Shape: (batch, q_len, 1)
         #questAtt = self.question_attn_var(q)
         nu = masked_softmax(questAtt.squeeze(2), q_mask, log_softmax= False)
