@@ -414,7 +414,7 @@ class BiDAFCharRNNOutputCoatt(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.LinearSelfAttentionOutput(hidden_size=hidden_size,
+        self.out = layers.BidafOutputRNN(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
@@ -435,7 +435,7 @@ class BiDAFCharRNNOutputCoatt(nn.Module):
 
         mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
 
-        out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        out = self.out(att, q_enc, q_mask, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
     
