@@ -84,26 +84,26 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    '''
+    #'''
     model = BiDAFCharRNNOutput(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    '''
+    #'''
     '''
     model = RNET(word_vectors=word_vectors,
                  char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     '''
-    #'''
+    '''
     model = BiDAFCharRNNOutputCoatt(word_vectors=word_vectors,
                       char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
     acceptingCharacterEmbeds = True
-    #'''
+    '''
     '''
     model = SelfAttChar(word_vectors=word_vectors,
                       char_vectors=char_vectors,
