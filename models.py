@@ -378,6 +378,7 @@ class BiDAFCharRNNOutput(nn.Module):
 
         return out
     
+    
 class BiDAFCharRNNOutputCoatt(nn.Module):
     """Baseline BiDAF model for SQuAD.
     Based on the paper:
@@ -414,7 +415,7 @@ class BiDAFCharRNNOutputCoatt(nn.Module):
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutputRnn(hidden_size=hidden_size,
+        self.out = layers.BiDAFOutputRnnCoatt(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
